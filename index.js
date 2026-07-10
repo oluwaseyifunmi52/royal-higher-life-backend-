@@ -23,6 +23,9 @@ import galleryRoutes from "./routes/galleryRoute.js";
 import prayerRoutes from "./routes/prayerRoute.js";
 import sermonRoutes from "./routes/sermonRoute.js";
 import ministryRoutes from "./routes/ministryRoute.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+import calendarRoutes from "./routes/calendarRoute.js";
+
 
 // Middlewares
 import notFound from "./Middleware/notFound.js";
@@ -55,9 +58,11 @@ app.use("/api/gallery", galleryRoutes);
 app.use("/api/prayers", prayerRoutes);
 app.use("/api/sermons", sermonRoutes);
 app.use("/api/ministries", ministryRoutes);
-
+app.use("/api/dashboard", dashboardRoutes);
 app.use(notFound);
 app.use(errorHandler);
+app.use("/api/calendar", calendarRoutes);
+
 
 const startServer = async () => {
     try {
