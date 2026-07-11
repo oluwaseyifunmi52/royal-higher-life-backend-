@@ -2,14 +2,9 @@ import express from "express";
 
 import auth from "../Middleware/auth.js";
 import adminMiddleware from "../Middleware/adminMiddleware.js";
-
-import {
-    getDashboard
-} from "../Controllers/dashboardController.js";
-
+import { getDashboard } from "../controllers/dashboardController.js";
 
 const router = express.Router();
-
 
 router.get(
     "/",
@@ -17,6 +12,5 @@ router.get(
     adminMiddleware,
     getDashboard
 );
-
 
 export default router;
