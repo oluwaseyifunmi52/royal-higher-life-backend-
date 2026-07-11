@@ -59,9 +59,11 @@ app.use("/api/prayers", prayerRoutes);
 app.use("/api/sermons", sermonRoutes);
 app.use("/api/ministries", ministryRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/calendar", calendarRoutes);
+
 app.use(notFound);
 app.use(errorHandler);
-app.use("/api/calendar", calendarRoutes);
+
 
 
 const startServer = async () => {
