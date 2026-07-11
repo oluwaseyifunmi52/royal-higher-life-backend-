@@ -1,25 +1,15 @@
 import express from "express";
-import auth from "../middleware/auth.js";
-import adminMiddleware from "../middleware/adminMiddleware.js";
-import {
-    getCalendarEvents,
-    createCalendarEvent
-} from "../controllers/calendarController.js";
+import auth from "../Middleware/auth.js";
+import adminMiddleware from "../Middleware/adminMiddleware.js";
+import { getDashboard } from "../controllers/dashboardController.js";
 
 const router = express.Router();
 
-// Public calendar
 router.get(
-    "/",
-    getCalendarEvents
-);
-
-// Admin create event
-router.post(
     "/",
     auth,
     adminMiddleware,
-    createCalendarEvent
+    getDashboard
 );
 
 export default router;
