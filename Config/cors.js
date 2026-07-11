@@ -1,12 +1,13 @@
-const cors = require("cors");
+import cors from "cors";
 
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN?.split(",").map((item) => item.trim()) || true,
+    origin: process.env.CORS_ORIGIN
+        ? process.env.CORS_ORIGIN.split(",").map((item) => item.trim())
+        : true,
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 };
 
-const corsMiddleware = cors(corsOptions);
-
-module.exports = { corsMiddleware, corsOptions };
+export const corsMiddleware = cors(corsOptions);
+export { corsOptions };
