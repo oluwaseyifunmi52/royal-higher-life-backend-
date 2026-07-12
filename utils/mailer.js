@@ -3,28 +3,41 @@ const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
     host: process.env.EMAIL_HOST,
     port: Number(process.env.EMAIL_PORT),
-    secure: process.env.EMAIL_PORT === "465", // true for 465, false for 587
+    secure: process.env.EMAIL_PORT === "465",
     auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS,
     },
 });
 
-/**
- * Generic Email Sender
- */
+transporter.verify((error, success) => {
+    if (error) {
+        console.error("❌ SMTP Error:", error);
+    } else {
+        console.log("✅ SMTP Server is ready");
+    }
+});
+
 async function sendEmail(to, subject, html) {
-    return transporter.sendMail({
-        from: `"Royal Higher Life Church" <${process.env.EMAIL_USER}>`,
-        to,
-        subject,
-        html,
-    });
+    try {
+        const info = await transporter.sendMail({
+            from: `"Royal Higher Life Church" <${process.env.EMAIL_USER}>`,
+            to,
+            subject,
+            html,
+        });
+
+        console.log("✅ Email sent:", info.response);
+
+        return info;
+    } catch (error) {
+        console.error("❌ Email sending failed:", error);
+        throw error;
+    }
 }
 
-/**
- * Send Verification OTP
- */
+
+
 async function sendOTPEmail(email, firstName, otp) {
     return sendEmail(
         email,
