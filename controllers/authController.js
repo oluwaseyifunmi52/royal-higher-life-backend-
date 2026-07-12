@@ -5,11 +5,12 @@ const authService = require("../services/authService");
 const register = asyncHandler(async (req, res) => {
     const user = await authService.registerUser(req.body);
 
-    res.status(201).json({
-        success: true,
-        message: "User registered successfully",
-        data: user,
-    });
+   res.status(201).json({
+    success: true,
+    message: "Registration successful. Please check your email for the verification code.",
+    data: user,
+     });
+
 });
 
 // Login

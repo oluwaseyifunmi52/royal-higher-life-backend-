@@ -20,12 +20,12 @@ const userSchema = new mongoose.Schema(
             unique: true,
             lowercase: true,
             trim: true,
+            match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"],
         },
-
         password: {
             type: String,
             required: true,
-            minlength: 6,
+            minlength: 8,
             select: false,
         },
 
@@ -35,14 +35,16 @@ const userSchema = new mongoose.Schema(
             default: "member",
         },
 
-        phone: {
+       phone: {
             type: String,
-            default: "",
+            required: true,
+            unique: true,
+            trim: true,
         },
 
         profileImage: {
-            type: String,
-            default: "",
+           type: String,
+           default: "https://ui-avatars.com/api/?background=0B5ED7&color=fff",
         },
 
         isActive: {
@@ -80,5 +82,6 @@ const userSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
 
 module.exports = mongoose.model("User", userSchema);
