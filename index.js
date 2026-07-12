@@ -49,6 +49,10 @@ app.get("/health", (req, res) => {
     });
 });
 
+app.get("/", (req, res) => {
+    res.status(200).json({ message: "Royal HigherLife API is running" });
+});
+
 app.use("/api/auth", authRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/contacts", contactRoutes);
