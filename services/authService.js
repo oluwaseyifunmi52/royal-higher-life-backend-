@@ -31,13 +31,12 @@ const registerUser = async (userData) => {
         !resolvedLastName ||
         !email ||
         !phone ||
-        !password ||
-        !confirmPassword
+        !password
     ) {
         throw new Error("All fields are required.");
     }
 
-    if (password !== confirmPassword) {
+    if (confirmPassword && password !== confirmPassword) {
         throw new Error("Passwords do not match.");
     }
 
@@ -68,44 +67,48 @@ const registerUser = async (userData) => {
     });
 
     // Send welcome email
-    await sendEmail(
-        user.email,
-        "Welcome to Royal Higher Life Ministries",
+    try {
+        await sendEmail(
+            user.email,
+            "Welcome to Royal Higher Life Ministries",
+            `
+        <div style="font-family: Arial, sans-serif; line-height:1.6;">
+            <h2>Welcome, ${user.firstName}!</h2>
+
+            <p>Your account has been created successfully.</p>
+
+            <p>
+                Thank you for joining <strong>Royal Higher Life Ministries</strong>.
+                We are delighted to have you as part of our community.
+            </p>
+
+            <p>God bless you.</p>
+
+            <br>
+
+            <p><strong>Royal Higher Life Ministries</strong></p>
+        </div>
         `
-    <div style="font-family: Arial, sans-serif; line-height:1.6;">
-        <h2>Welcome, ${user.firstName}!</h2>
+        );
 
-        <p>Your account has been created successfully.</p>
+        await sendEmail(
+            user.email,
+            "Verify Your Email",
+            `
+        <h2>Royal Higher Life Ministries</h2>
 
-        <p>
-            Thank you for joining <strong>Royal Higher Life Ministries</strong>.
-            We are delighted to have you as part of our community.
-        </p>
+        <p>Hello ${user.firstName},</p>
 
-        <p>God bless you.</p>
+        <p>Your verification code is:</p>
 
-        <br>
+        <h1 style="letter-spacing:5px;">${otp}</h1>
 
-        <p><strong>Royal Higher Life Ministries</strong></p>
-    </div>
-    `
-    );
-
-    await sendEmail(
-        user.email,
-        "Verify Your Email",
+        <p>This code expires in 10 minutes.</p>
         `
-    <h2>Royal Higher Life Ministries</h2>
-
-    <p>Hello ${user.firstName},</p>
-
-    <p>Your verification code is:</p>
-
-    <h1 style="letter-spacing:5px;">${otp}</h1>
-
-    <p>This code expires in 10 minutes.</p>
-    `
-    );
+        );
+    } catch (emailError) {
+        console.error("Failed to send registration emails:", emailError.message);
+    }
 
 
     user.password = undefined;
@@ -227,8 +230,11 @@ const forgotPassword = async (email) => {
 
     await user.save();
 
+    const frontendUrl =
+        process.env.FRONTEND_URL || "https://royal-higher-life-9ttr.vercel.app";
+
     const resetLink =
-        `http://localhost:5173/reset-password/${resetToken}`;
+        `${frontendUrl}/reset-password/${resetToken}`;
 
     await sendEmail(
         user.email,

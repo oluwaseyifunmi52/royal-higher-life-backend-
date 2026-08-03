@@ -1,25 +1,17 @@
-import express from "express";
-import auth from "../Middleware/auth.js";
-import adminMiddleware from "../Middleware/adminMiddleware.js";
-import {
+const express = require("express");
+const auth = require("../Middleware/auth");
+const adminMiddleware = require("../Middleware/adminMiddleware");
+const {
     getCalendarEvents,
     createCalendarEvent
-} from "../controllers/calendarController.js";
+} = require("../controllers/calendarController");
 
 const router = express.Router();
 
 // Public calendar
-router.get(
-    "/",
-    getCalendarEvents
-);
+router.get("/", getCalendarEvents);
 
 // Admin create event
-router.post(
-    "/",
-    auth,
-    adminMiddleware,
-    createCalendarEvent
-);
+router.post("/", auth, adminMiddleware, createCalendarEvent);
 
-export default router;
+module.exports = router;

@@ -21,7 +21,10 @@ const login = asyncHandler(async (req, res) => {
         success: true,
         message: "Login successful",
         token,
-        data: user,
+        data: {
+            token,
+            user,
+        },
     });
 });
 

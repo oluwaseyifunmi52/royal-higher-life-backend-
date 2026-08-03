@@ -1,5 +1,4 @@
-import mongoose from "mongoose";
-
+const mongoose = require("mongoose");
 
 const calendarSchema = new mongoose.Schema(
     {
@@ -56,8 +55,4 @@ const calendarSchema = new mongoose.Schema(
         timestamps: true
     });
 
-
-export default mongoose.model(
-    "Calendar",
-    calendarSchema
-);
+module.exports = mongoose.model("Calendar", calendarSchema);

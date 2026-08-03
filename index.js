@@ -1,35 +1,35 @@
-import "dotenv/config";
+require("dotenv").config();
 
-import dns from "node:dns";
+const dns = require("node:dns");
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
+const express = require("express");
+const morgan = require("morgan");
+const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
 
-import express from "express";
-import morgan from "morgan";
-import helmet from "helmet";
-import cookieParser from "cookie-parser";
-
-import { connectDB } from "./Config/db.js";
-import { corsMiddleware } from "./Config/cors.js";
-import { cloudinary } from "./Config/cloudinary.js";
+const { connectDB } = require("./Config/db");
+const { corsMiddleware } = require("./Config/cors");
+const { cloudinary } = require("./Config/cloudinary");
 
 // Routes
-import authRoutes from "./routes/authRoute.js";
-import reviewRoutes from "./routes/reviewRoute.js";
-import contactRoutes from "./routes/contactRoute.js";
-import donationRoutes from "./routes/donationRoute.js";
-import eventRoutes from "./routes/eventRoute.js";
-import galleryRoutes from "./routes/galleryRoute.js";
-import prayerRoutes from "./routes/prayerRoute.js";
-import sermonRoutes from "./routes/sermonRoute.js";
-import ministryRoutes from "./routes/ministryRoute.js";
-import dashboardRoutes from "./routes/dashboardRoutes.js";
-import calendarRoutes from "./routes/calendarRoute.js";
-
+const authRoutes = require("./routes/authRoute");
+const reviewRoutes = require("./routes/reviewRoute");
+const contactRoutes = require("./routes/contactRoute");
+const donationRoutes = require("./routes/donationRoute");
+const eventRoutes = require("./routes/eventRoute");
+const galleryRoutes = require("./routes/galleryRoute");
+const prayerRoutes = require("./routes/prayerRoute");
+const sermonRoutes = require("./routes/sermonRoute");
+const ministryRoutes = require("./routes/ministryRoute");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const adminRoutes = require("./routes/adminRoute");
+const userRoutes = require("./routes/userRoute");
+const calendarRoutes = require("./routes/calendarRoute");
 
 // Middlewares
-import notFound from "./Middleware/notFound.js";
-import errorHandler from "./Middleware/errorHandler.js";
+const notFound = require("./Middleware/notFound");
+const errorHandler = require("./Middleware/errorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -62,13 +62,13 @@ app.use("/api/gallery", galleryRoutes);
 app.use("/api/prayers", prayerRoutes);
 app.use("/api/sermons", sermonRoutes);
 app.use("/api/ministries", ministryRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/calendar", calendarRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
-
-
 
 const startServer = async () => {
     try {
@@ -85,4 +85,4 @@ const startServer = async () => {
 
 startServer();
 
-export default app;
+module.exports = app;

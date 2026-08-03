@@ -5,7 +5,7 @@ const {
     getMinistry,
     updateMinistry,
     deleteMinistry,
-} = require("../controllers/ministry.Controller");
+} = require("../controllers/ministryController");
 
 const router = express.Router();
 

@@ -8,21 +8,30 @@ const createDonation = asyncHandler(async (req, res) => {
         donorName,
         firstname,
         lastname,
+        firstName,
+        lastName,
         name,
         email,
         phone,
         amount,
         currency,
         paymentMethod,
+        payment,
         paymentReference,
         status,
         donationType,
+        purpose,
         isAnonymous,
+        anonymous,
         note,
         message,
     } = req.body;
+
     const resolvedDonorName =
-        donorName || name || [firstname, lastname].filter(Boolean).join(" ").trim();
+        donorName ||
+        name ||
+        [firstName, lastName].filter(Boolean).join(" ").trim() ||
+        [firstname, lastname].filter(Boolean).join(" ").trim();
 
     if (!resolvedDonorName || !amount) {
         throw new ApiError(400, "Donor name and amount are required");
@@ -34,11 +43,11 @@ const createDonation = asyncHandler(async (req, res) => {
         phone,
         amount,
         currency,
-        paymentMethod,
+        paymentMethod: paymentMethod || payment,
         paymentReference,
         status,
-        donationType,
-        isAnonymous,
+        donationType: donationType || purpose,
+        isAnonymous: isAnonymous ?? anonymous ?? false,
         note: note || message,
     });
     return res.status(201).json(new ApiResponse(201, "Donation recorded", donation));

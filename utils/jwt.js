@@ -25,7 +25,14 @@ const verifyToken = (token) => {
     return jwt.verify(token, JWT_SECRET);
 };
 
+const signToken = (payload) => {
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: JWT_EXPIRES_IN,
+    });
+};
+
 module.exports = {
     generateToken,
     verifyToken,
+    signToken,
 };
