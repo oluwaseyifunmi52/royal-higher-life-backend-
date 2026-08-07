@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { signToken } = require("../utils/jwt");
 const { sendEmail } = require("../utils/mailer");
 const { generateOTP } = require("../utils/otp");
+const ApiError = require("../utils/apiError");
 
 // Register User
 const registerUser = async (userData) => {
@@ -33,23 +34,23 @@ const registerUser = async (userData) => {
         !phone ||
         !password
     ) {
-        throw new Error("All fields are required.");
+        throw new ApiError(400, "All fields are required.");
     }
 
     if (confirmPassword && password !== confirmPassword) {
-        throw new Error("Passwords do not match.");
+        throw new ApiError(400, "Passwords do not match.");
     }
 
     const emailExists = await User.findOne({ email });
 
     if (emailExists) {
-        throw new Error("Email already exists.");
+        throw new ApiError(400, "Email already exists.");
     }
 
     const phoneExists = await User.findOne({ phone });
 
     if (phoneExists) {
-        throw new Error("Phone number already exists.");
+        throw new ApiError(400, "Phone number already exists.");
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -119,7 +120,7 @@ const registerUser = async (userData) => {
 // Verify email with OTP
 const verifyEmail = async ({ email, otp }) => {
     if (!email || !otp) {
-        throw new Error("Email and OTP are required.");
+        throw new ApiError(400, "Email and OTP are required.");
     }
 
     const user = await User.findOne({
@@ -129,7 +130,7 @@ const verifyEmail = async ({ email, otp }) => {
     });
 
     if (!user) {
-        throw new Error("Invalid or expired OTP.");
+        throw new ApiError(400, "Invalid or expired OTP.");
     }
 
     user.otp = null;
@@ -144,13 +145,13 @@ const verifyEmail = async ({ email, otp }) => {
 // Resend verification OTP
 const resendOTP = async (email) => {
     if (!email) {
-        throw new Error("Email is required.");
+        throw new ApiError(400, "Email is required.");
     }
 
     const user = await User.findOne({ email });
 
     if (!user) {
-        throw new Error("No account found with this email.");
+        throw new ApiError(404, "No account found with this email.");
     }
 
     const otp = generateOTP();
@@ -183,15 +184,15 @@ const resetPassword = async ({
 }) => {
 
     if (!token) {
-        throw new Error("Reset token is required.");
+        throw new ApiError(400, "Reset token is required.");
     }
 
     if (!password || !confirmPassword) {
-        throw new Error("Password and Confirm Password are required.");
+        throw new ApiError(400, "Password and Confirm Password are required.");
     }
 
     if (password !== confirmPassword) {
-        throw new Error("Passwords do not match.");
+        throw new ApiError(400, "Passwords do not match.");
     }
 
     const user = await User.findOne({
@@ -200,7 +201,7 @@ const resetPassword = async ({
     }).select("+password");
 
     if (!user) {
-        throw new Error("Invalid or expired reset token.");
+        throw new ApiError(400, "Invalid or expired reset token.");
     }
 
     user.password = await bcrypt.hash(password, 10);
@@ -219,7 +220,7 @@ const forgotPassword = async (email) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-        throw new Error("No account found with this email.");
+        throw new ApiError(404, "No account found with this email.");
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
@@ -269,13 +270,13 @@ const loginUser = async ({ email, password }) => {
     const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
-        throw new Error("Invalid email or password.");
+        throw new ApiError(401, "Invalid email or password.");
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-        throw new Error("Invalid email or password.");
+        throw new ApiError(401, "Invalid email or password.");
     }
 
     const token = signToken({
@@ -313,7 +314,7 @@ const changePassword = async (
     const user = await User.findById(userId).select("+password");
 
     if (!user) {
-        throw new Error("User not found.");
+        throw new ApiError(404, "User not found.");
     }
 
     const isMatch = await bcrypt.compare(
@@ -322,7 +323,7 @@ const changePassword = async (
     );
 
     if (!isMatch) {
-        throw new Error("Current password is incorrect.");
+        throw new ApiError(400, "Current password is incorrect.");
     }
 
     user.password = await bcrypt.hash(newPassword, 10);

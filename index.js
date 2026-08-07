@@ -34,7 +34,11 @@ const errorHandler = require("./Middleware/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-app.use(helmet());
+app.use(helmet({
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: false,
+}));
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

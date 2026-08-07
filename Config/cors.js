@@ -4,9 +4,9 @@ const DEFAULT_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:3000",
     "http://localhost:4000",
+    "http://localhost:5174",
     "https://royal-higher-life-9ttr.vercel.app",
     "https://royal-higher-life-v9tt.vercel.app",
-    "https://royal-higher-life-backend-2o66.onrender.com",
 ];
 
 const configuredOrigins = process.env.CORS_ORIGIN
@@ -16,12 +16,20 @@ const configuredOrigins = process.env.CORS_ORIGIN
 const allowedOrigins = [...new Set([...DEFAULT_ORIGINS, ...configuredOrigins])];
 
 const corsOptions = {
-    origin: allowedOrigins,
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    exposedHeaders: ["Set-Cookie"],
+    maxAge: 86400,
 };
 
 const corsMiddleware = cors(corsOptions);
 
-module.exports = { corsMiddleware, corsOptions };
+module.exports = { corsMiddleware, corsOptions, allowedOrigins };
