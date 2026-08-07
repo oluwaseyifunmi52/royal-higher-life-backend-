@@ -2,6 +2,7 @@ const Contact = require("../Models/contact");
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
+const { sendContactConfirmation } = require("../utils/mailer");
 
 const createContact = asyncHandler(async (req, res) => {
     const { firstname, lastname, name, email, phone, subject, message } = req.body;
@@ -18,6 +19,10 @@ const createContact = asyncHandler(async (req, res) => {
         subject,
         message,
     });
+
+    sendContactConfirmation(email, fullName).catch((err) =>
+        console.error("Contact confirmation email failed:", err.message)
+    );
 
     return res.status(201).json(new ApiResponse(201, "Contact message sent", contact));
 });

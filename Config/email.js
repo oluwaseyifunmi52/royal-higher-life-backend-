@@ -1,13 +1,22 @@
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || "smtp.gmail.com",
-    port: Number(process.env.EMAIL_PORT) || 587,
-    secure: false,
+    service: "gmail",
     auth: {
+        type: "OAuth2",
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
     },
+});
+
+transporter.verify((error) => {
+    if (error) {
+        console.error("OAuth2 Email Error:", error);
+    } else {
+        console.log("OAuth2 Email Server is ready");
+    }
 });
 
 module.exports = transporter;

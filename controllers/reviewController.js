@@ -4,13 +4,14 @@ const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
 
 const createReview = asyncHandler(async (req, res) => {
-    const { name, message, rating } = req.body;
+    const { name, message, comment, rating } = req.body;
+    const reviewText = message || comment;
 
-    if (!name || !message || rating === undefined) {
+    if (!name || !reviewText || rating === undefined) {
         throw new ApiError(400, "Name, message, and rating are required");
     }
 
-    const review = await Review.create({ name, message, rating });
+    const review = await Review.create({ name, message: reviewText, rating });
 
     return res.status(201).json(new ApiResponse(201, "Review created successfully", review));
 });

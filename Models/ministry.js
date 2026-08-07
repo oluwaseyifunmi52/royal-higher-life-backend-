@@ -11,7 +11,6 @@ const ministrySchema = new mongoose.Schema(
 
         slug: {
             type: String,
-            required: true,
             unique: true,
             lowercase: true,
         },
@@ -23,7 +22,7 @@ const ministrySchema = new mongoose.Schema(
 
         leader: {
             type: String,
-            required: true,
+            default: "",
         },
 
         assistantLeader: {

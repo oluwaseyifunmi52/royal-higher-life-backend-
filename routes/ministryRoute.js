@@ -1,4 +1,6 @@
 const express = require("express");
+const auth = require("../Middleware/auth");
+const authorize = require("../Middleware/authorize");
 const {
     createMinistry,
     getMinistries,
@@ -9,14 +11,14 @@ const {
 
 const router = express.Router();
 
-router.post("/", createMinistry);
+router.post("/", auth, authorize("admin"), createMinistry);
 
 router.get("/", getMinistries);
 
 router.get("/:id", getMinistry);
 
-router.put("/:id", updateMinistry);
+router.put("/:id", auth, authorize("admin"), updateMinistry);
 
-router.delete("/:id", deleteMinistry);
+router.delete("/:id", auth, authorize("admin"), deleteMinistry);
 
 module.exports = router;

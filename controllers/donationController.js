@@ -2,6 +2,7 @@ const Donation = require("../Models/donation");
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
+const { sendDonationConfirmation } = require("../utils/mailer");
 
 const createDonation = asyncHandler(async (req, res) => {
     const {
@@ -50,6 +51,13 @@ const createDonation = asyncHandler(async (req, res) => {
         isAnonymous: isAnonymous ?? anonymous ?? false,
         note: note || message,
     });
+
+    if (email) {
+        sendDonationConfirmation(email, resolvedDonorName, amount, currency || "NGN").catch((err) =>
+            console.error("Donation confirmation email failed:", err.message)
+        );
+    }
+
     return res.status(201).json(new ApiResponse(201, "Donation recorded", donation));
 });
 

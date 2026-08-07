@@ -1,120 +1,71 @@
 const Sermon = require("../Models/sermon");
+const asyncHandler = require("../utils/asyncHandler");
+const ApiError = require("../utils/apiError");
+const ApiResponse = require("../utils/apiResponse");
 
-// Create Sermon
-const createSermon = async (req, res) => {
-    try {
-        const sermon = await Sermon.create(req.body);
+const createSermon = asyncHandler(async (req, res) => {
+    const { title, preacher, speaker, description, date, sermonDate, ...rest } = req.body;
 
-        res.status(201).json({
-            success: true,
-            message: "Sermon created successfully",
-            data: sermon,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    if (!title || !(preacher || speaker) || !description) {
+        throw new ApiError(400, "Title, preacher/speaker, and description are required");
     }
-};
 
-// Get All Sermons
-const getSermons = async (req, res) => {
-    try {
-        const sermons = await Sermon.find().sort({ sermonDate: -1 });
+    const sermonData = {
+        ...rest,
+        title,
+        preacher: preacher || speaker,
+        description,
+        sermonDate: sermonDate || date || new Date(),
+    };
 
-        res.status(200).json({
-            success: true,
-            count: sermons.length,
-            data: sermons,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    const sermon = await Sermon.create(sermonData);
+
+    res.status(201).json(new ApiResponse(201, "Sermon created successfully", sermon));
+});
+
+const getSermons = asyncHandler(async (req, res) => {
+    const sermons = await Sermon.find().sort({ sermonDate: -1 });
+    res.status(200).json(new ApiResponse(200, "Sermons fetched successfully", sermons));
+});
+
+const getSermon = asyncHandler(async (req, res) => {
+    const sermon = await Sermon.findById(req.params.id);
+
+    if (!sermon) {
+        throw new ApiError(404, "Sermon not found");
     }
-};
 
-// Get Single Sermon
-const getSermon = async (req, res) => {
-    try {
-        const sermon = await Sermon.findById(req.params.id);
+    res.status(200).json(new ApiResponse(200, "Sermon fetched successfully", sermon));
+});
 
-        if (!sermon) {
-            return res.status(404).json({
-                success: false,
-                message: "Sermon not found",
-            });
-        }
+const updateSermon = asyncHandler(async (req, res) => {
+    const { preacher, speaker, date, sermonDate, ...rest } = req.body;
+    const updateData = { ...rest };
+    if (preacher || speaker) updateData.preacher = preacher || speaker;
+    if (sermonDate || date) updateData.sermonDate = sermonDate || date;
 
-        res.status(200).json({
-            success: true,
-            data: sermon,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    const sermon = await Sermon.findByIdAndUpdate(
+        req.params.id,
+        updateData,
+        { new: true, runValidators: true }
+    );
+
+    if (!sermon) {
+        throw new ApiError(404, "Sermon not found");
     }
-};
 
-// Update Sermon
-const updateSermon = async (req, res) => {
-    try {
-        const sermon = await Sermon.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-                runValidators: true,
-            }
-        );
+    res.status(200).json(new ApiResponse(200, "Sermon updated successfully", sermon));
+});
 
-        if (!sermon) {
-            return res.status(404).json({
-                success: false,
-                message: "Sermon not found",
-            });
-        }
+const deleteSermon = asyncHandler(async (req, res) => {
+    const sermon = await Sermon.findByIdAndDelete(req.params.id);
 
-        res.status(200).json({
-            success: true,
-            message: "Sermon updated successfully",
-            data: sermon,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    if (!sermon) {
+        throw new ApiError(404, "Sermon not found");
     }
-};
 
-// Delete Sermon
-const deleteSermon = async (req, res) => {
-    try {
-        const sermon = await Sermon.findByIdAndDelete(req.params.id);
-
-        if (!sermon) {
-            return res.status(404).json({
-                success: false,
-                message: "Sermon not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Sermon deleted successfully",
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
-    }
-};
+    res.status(200).json(new ApiResponse(200, "Sermon deleted successfully", null));
+});
 
 module.exports = {
     createSermon,

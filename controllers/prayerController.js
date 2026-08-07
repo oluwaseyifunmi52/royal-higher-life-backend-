@@ -2,6 +2,7 @@ const PrayerRequest = require("../Models/prayerRequest");
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
+const { sendPrayerConfirmation } = require("../utils/mailer");
 
 const createPrayerRequest = asyncHandler(async (req, res) => {
     const {
@@ -33,6 +34,12 @@ const createPrayerRequest = asyncHandler(async (req, res) => {
         isPrivate,
         isAnswered,
     });
+
+    if (email) {
+        sendPrayerConfirmation(email, fullName).catch((err) =>
+            console.error("Prayer confirmation email failed:", err.message)
+        );
+    }
 
     return res.status(201).json(new ApiResponse(201, "Prayer request created successfully", prayerRequest));
 });

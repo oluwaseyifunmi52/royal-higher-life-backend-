@@ -18,6 +18,10 @@ const registerUser = async (userData) => {
         phone,
         password,
         confirmPassword,
+        country,
+        state,
+        gender,
+        newsletter,
     } = userData;
 
     const resolvedFirstName = firstName || firstname || name?.split(" ")[0];
@@ -63,6 +67,10 @@ const registerUser = async (userData) => {
         email,
         phone,
         password: hashedPassword,
+        country,
+        state,
+        gender,
+        newsletter,
         otp,
         otpExpires: new Date(Date.now() + 10 *60 * 1000), // OTP expires in 10 minutes
     });
@@ -187,11 +195,11 @@ const resetPassword = async ({
         throw new ApiError(400, "Reset token is required.");
     }
 
-    if (!password || !confirmPassword) {
-        throw new ApiError(400, "Password and Confirm Password are required.");
+    if (!password) {
+        throw new ApiError(400, "Password is required.");
     }
 
-    if (password !== confirmPassword) {
+    if (confirmPassword && password !== confirmPassword) {
         throw new ApiError(400, "Passwords do not match.");
     }
 

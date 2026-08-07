@@ -1,5 +1,6 @@
 const asyncHandler = require("../utils/asyncHandler");
 const authService = require("../services/authService");
+const { uploadImage } = require("../services/uploadService");
 
 // Register
 const register = asyncHandler(async (req, res) => {
@@ -21,10 +22,7 @@ const login = asyncHandler(async (req, res) => {
         success: true,
         message: "Login successful",
         token,
-        data: {
-            token,
-            user,
-        },
+        user,
     });
 });
 
@@ -74,7 +72,7 @@ const getProfile = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        data: user,
+        user,
     });
 });
 
@@ -85,13 +83,27 @@ const updateProfile = asyncHandler(async (req, res) => {
     res.status(200).json({
         success: true,
         message: "Profile updated successfully",
-        data: user,
+        user,
     });
 });
 
 // Change Password
 const changePassword = asyncHandler(async (req, res) => {
     const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({
+            success: false,
+            message: "Current password and new password are required",
+        });
+    }
+
+    if (newPassword.length < 8) {
+        return res.status(400).json({
+            success: false,
+            message: "New password must be at least 8 characters",
+        });
+    }
 
     await authService.changePassword(
         req.user._id,
@@ -105,6 +117,28 @@ const changePassword = asyncHandler(async (req, res) => {
     });
 });
 
+// Upload Profile Picture
+const uploadProfileImage = asyncHandler(async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({
+            success: false,
+            message: "Please upload an image file",
+        });
+    }
+
+    const result = await uploadImage(req.file.path, "profile-images");
+
+    const user = await authService.updateProfile(req.user._id, {
+        profileImage: result.url,
+    });
+
+    res.status(200).json({
+        success: true,
+        message: "Profile picture updated successfully",
+        user,
+    });
+});
+
 module.exports = {
     register,
     login,
@@ -115,4 +149,5 @@ module.exports = {
     getProfile,
     updateProfile,
     changePassword,
+    uploadProfileImage,
 };

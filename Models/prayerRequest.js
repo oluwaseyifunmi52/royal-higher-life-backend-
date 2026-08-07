@@ -10,6 +10,8 @@ const prayerRequestSchema = new mongoose.Schema(
         email: {
             type: String,
             trim: true,
+            lowercase: true,
+            match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"],
         },
         phone: {
             type: String,
@@ -23,6 +25,7 @@ const prayerRequestSchema = new mongoose.Schema(
         category: {
             type: String,
             trim: true,
+            default: "General Prayer",
         },
         isPrivate: {
             type: Boolean,

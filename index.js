@@ -26,6 +26,11 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const adminRoutes = require("./routes/adminRoute");
 const userRoutes = require("./routes/userRoute");
 const calendarRoutes = require("./routes/calendarRoute");
+const newsletterRoutes = require("./routes/newsletterRoute");
+const eventRegistrationRoutes = require("./routes/eventRegistrationRoute");
+const volunteerRoutes = require("./routes/volunteerRoute");
+const partnershipRoutes = require("./routes/partnershipRoute");
+const announcementRoutes = require("./routes/announcementRoute");
 
 // Middlewares
 const notFound = require("./Middleware/notFound");
@@ -70,6 +75,11 @@ app.use("/api/users", userRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/calendar", calendarRoutes);
+app.use("/api/newsletter", newsletterRoutes);
+app.use("/api/event-registrations", eventRegistrationRoutes);
+app.use("/api/volunteers", volunteerRoutes);
+app.use("/api/partnerships", partnershipRoutes);
+app.use("/api/announcements", announcementRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

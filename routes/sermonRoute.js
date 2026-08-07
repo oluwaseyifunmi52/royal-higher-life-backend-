@@ -1,4 +1,6 @@
 const express = require("express");
+const auth = require("../Middleware/auth");
+const authorize = require("../Middleware/authorize");
 const {
     createSermon,
     getSermons,
@@ -9,14 +11,14 @@ const {
 
 const router = express.Router();
 
-router.post("/", createSermon);
+router.post("/", auth, authorize("admin"), createSermon);
 
 router.get("/", getSermons);
 
 router.get("/:id", getSermon);
 
-router.put("/:id", updateSermon);
+router.put("/:id", auth, authorize("admin"), updateSermon);
 
-router.delete("/:id", deleteSermon);
+router.delete("/:id", auth, authorize("admin"), deleteSermon);
 
 module.exports = router;

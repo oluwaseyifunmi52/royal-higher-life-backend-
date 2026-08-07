@@ -1,127 +1,60 @@
 const Ministry = require("../Models/ministry");
+const asyncHandler = require("../utils/asyncHandler");
+const ApiError = require("../utils/apiError");
+const ApiResponse = require("../utils/apiResponse");
 
+const createMinistry = asyncHandler(async (req, res) => {
+    const { name, description } = req.body;
 
-// Create Ministry
-const createMinistry = async (req, res) => {
-    try {
-        const ministry = await Ministry.create(req.body);
-
-        res.status(201).json({
-            success: true,
-            message: "Ministry created successfully",
-            data: ministry,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    if (!name || !description) {
+        throw new ApiError(400, "Name and description are required");
     }
-};
 
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
-// Get All Ministries
-const getMinistries = async (req, res) => {
-    try {
-        const ministries = await Ministry.find().sort({
-            createdAt: -1,
-        });
+    const ministry = await Ministry.create({ ...req.body, slug });
 
-        res.status(200).json({
-            success: true,
-            count: ministries.length,
-            data: ministries,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    res.status(201).json(new ApiResponse(201, "Ministry created successfully", ministry));
+});
+
+const getMinistries = asyncHandler(async (req, res) => {
+    const ministries = await Ministry.find().sort({ createdAt: -1 });
+    res.status(200).json(new ApiResponse(200, "Ministries fetched successfully", ministries));
+});
+
+const getMinistry = asyncHandler(async (req, res) => {
+    const ministry = await Ministry.findById(req.params.id);
+
+    if (!ministry) {
+        throw new ApiError(404, "Ministry not found");
     }
-};
 
+    res.status(200).json(new ApiResponse(200, "Ministry fetched successfully", ministry));
+});
 
-// Get Single Ministry
-const getMinistry = async (req, res) => {
-    try {
-        const ministry = await Ministry.findById(req.params.id);
+const updateMinistry = asyncHandler(async (req, res) => {
+    const ministry = await Ministry.findByIdAndUpdate(
+        req.params.id,
+        req.body,
+        { new: true, runValidators: true }
+    );
 
-        if (!ministry) {
-            return res.status(404).json({
-                success: false,
-                message: "Ministry not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            data: ministry,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    if (!ministry) {
+        throw new ApiError(404, "Ministry not found");
     }
-};
 
+    res.status(200).json(new ApiResponse(200, "Ministry updated successfully", ministry));
+});
 
-// Update Ministry
-const updateMinistry = async (req, res) => {
-    try {
-        const ministry = await Ministry.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            {
-                new: true,
-                runValidators: true,
-            }
-        );
+const deleteMinistry = asyncHandler(async (req, res) => {
+    const ministry = await Ministry.findByIdAndDelete(req.params.id);
 
-        if (!ministry) {
-            return res.status(404).json({
-                success: false,
-                message: "Ministry not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Ministry updated successfully",
-            data: ministry,
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+    if (!ministry) {
+        throw new ApiError(404, "Ministry not found");
     }
-};
 
-
-// Delete Ministry
-const deleteMinistry = async (req, res) => {
-    try {
-        const ministry = await Ministry.findByIdAndDelete(req.params.id);
-
-        if (!ministry) {
-            return res.status(404).json({
-                success: false,
-                message: "Ministry not found",
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Ministry deleted successfully",
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: error.message,
-        });
-    }
-};
+    res.status(200).json(new ApiResponse(200, "Ministry deleted successfully", null));
+});
 
 module.exports = {
     createMinistry,

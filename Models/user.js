@@ -42,6 +42,29 @@ const userSchema = new mongoose.Schema(
             trim: true,
         },
 
+        country: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        state: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Other", ""],
+            default: "",
+        },
+
+        newsletter: {
+            type: Boolean,
+            default: true,
+        },
+
         profileImage: {
            type: String,
            default: "https://ui-avatars.com/api/?background=0B5ED7&color=fff",
