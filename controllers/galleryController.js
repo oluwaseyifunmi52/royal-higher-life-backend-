@@ -1,6 +1,6 @@
 const asyncHandler = require("../utils/asyncHandler");
 const galleryService = require("../services/galleryService");
-const { uploadImage, deleteImage } = require("../services/uploadService");
+const { deleteImage } = require("../services/uploadService");
 
 const createGalleryItem = asyncHandler(async (req, res) => {
     const { title, description, category, isFeatured } = req.body;
@@ -9,9 +9,8 @@ const createGalleryItem = asyncHandler(async (req, res) => {
     let publicId = "";
 
     if (req.file) {
-        const result = await uploadImage(req.file.path, "gallery");
-        imageUrl = result.url;
-        publicId = result.publicId;
+        imageUrl = req.file.path;
+        publicId = req.file.filename;
     }
 
     const gallery = await galleryService.createGallery({
@@ -68,9 +67,8 @@ const updateGalleryItem = asyncHandler(async (req, res) => {
         if (existing.publicId) {
             await deleteImage(existing.publicId);
         }
-        const result = await uploadImage(req.file.path, "gallery");
-        updateData.imageUrl = result.url;
-        updateData.publicId = result.publicId;
+        updateData.imageUrl = req.file.path;
+        updateData.publicId = req.file.filename;
     }
 
     const gallery = await galleryService.updateGallery(req.params.id, updateData);

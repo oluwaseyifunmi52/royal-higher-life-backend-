@@ -1,6 +1,5 @@
 const asyncHandler = require("../utils/asyncHandler");
 const authService = require("../services/authService");
-const { uploadImage } = require("../services/uploadService");
 
 // Register
 const register = asyncHandler(async (req, res) => {
@@ -126,10 +125,8 @@ const uploadProfileImage = asyncHandler(async (req, res) => {
         });
     }
 
-    const result = await uploadImage(req.file.path, "profile-images");
-
     const user = await authService.updateProfile(req.user._id, {
-        profileImage: result.url,
+        profileImage: req.file.path,
     });
 
     res.status(200).json({
