@@ -1,23 +1,66 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   getAdminSermons, createSermon, updateSermon, deleteSermon,
   getAdminEvents, createEvent, updateEvent, deleteEvent,
-  getAdminMinistries, createMinistry, deleteMinistry,
-  getAdminGallery, createGalleryItem, deleteGalleryItem,
-  getAnnouncements, createAnnouncement, deleteAnnouncement,
+  getAdminMinistries, createMinistry, updateMinistry, deleteMinistry,
+  getAdminGallery, createGalleryItem, updateGalleryItem, deleteGalleryItem,
+  getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement,
 } from '../services/adminService';
 
 const adminTabs = ['Sermons', 'Events', 'Ministries', 'Gallery', 'Announcements'];
 
 function Modal({ open, onClose, title, children }) {
+  const overlayRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden';
+      const focusableElements = overlayRef.current?.querySelectorAll(
+        'a[href], button, input, textarea, select, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusableElements?.length) {
+        setTimeout(() => focusableElements[0].focus(), 0);
+      }
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && open) {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h3 className="text-lg font-bold text-gray-800">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/50 animate-fade-in"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto animate-slide-up"
+      >
+        <div className="flex items-center justify-between p-6 border-b border-navy-100">
+          <h3 id="modal-title" className="text-lg font-bold text-navy-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="p-1 text-navy-400 hover:text-navy-600 rounded-lg hover:bg-navy-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+            aria-label="Close modal"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -36,6 +79,8 @@ const emptyAnnouncement = { title: '', content: '', priority: 'normal' };
 
 export default function Admin() {
   const navigate = useNavigate();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('Sermons');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -127,7 +172,7 @@ export default function Admin() {
         }
       } else if (activeTab === 'Ministries') {
         if (editingId) {
-          await createMinistry(form);
+          await updateMinistry(editingId, form);
         } else {
           await createMinistry(form);
         }
@@ -136,9 +181,17 @@ export default function Admin() {
         fd.append('title', form.title);
         fd.append('description', form.description);
         if (galleryFile) fd.append('image', galleryFile);
-        await createGalleryItem(fd);
+        if (editingId) {
+          await updateGalleryItem(editingId, fd);
+        } else {
+          await createGalleryItem(fd);
+        }
       } else if (activeTab === 'Announcements') {
-        await createAnnouncement(form);
+        if (editingId) {
+          await updateAnnouncement(editingId, form);
+        } else {
+          await createAnnouncement(form);
+        }
       }
       setModalOpen(false);
       setSuccess(`${activeTab.slice(0, -1)} saved successfully.`);
@@ -167,20 +220,20 @@ export default function Admin() {
 
   const renderFormField = (label, key, type = 'text', opts = {}) => (
     <div key={key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-navy-700 mb-1">{label}</label>
       {opts.type === 'textarea' ? (
         <textarea
           value={form[key] || ''}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           required
           rows={3}
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none resize-none"
+          className="w-full px-4 py-2.5 border border-navy-200 rounded-xl focus:ring-2 focus:ring-gold-400 focus:border-gold-400 outline-none resize-none"
         />
       ) : opts.type === 'select' ? (
         <select
           value={form[key] || ''}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none bg-white"
+          className="w-full px-4 py-2.5 border border-navy-200 rounded-xl focus:ring-2 focus:ring-gold-400 focus:border-gold-400 outline-none bg-white"
         >
           {opts.options.map((o) => (
             <option key={o} value={o}>{o}</option>
@@ -192,7 +245,7 @@ export default function Admin() {
           value={form[key] || ''}
           onChange={(e) => setForm({ ...form, [key]: e.target.value })}
           required
-          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+          className="w-full px-4 py-2.5 border border-navy-200 rounded-xl focus:ring-2 focus:ring-gold-400 focus:border-gold-400 outline-none"
         />
       )}
     </div>
@@ -200,220 +253,437 @@ export default function Admin() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="text-gray-500 text-lg">Loading admin dashboard...</div>
+      <div className="min-h-screen flex items-center justify-center bg-navy-50">
+        <div className="text-navy-500 text-lg">Loading admin dashboard...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <nav className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-800">Admin Dashboard</h1>
-          <button onClick={() => navigate('/dashboard')} className="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-            Back to Dashboard
+    <div className="min-h-screen bg-navy-50 flex">
+      <aside
+        className={`fixed lg:relative inset-y-0 left-0 z-[var(--z-fixed)] w-64 bg-white border-r border-navy-100 transition-all duration-300 ease-in-out flex flex-col ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } ${sidebarCollapsed ? 'w-20' : ''}`}
+        aria-label="Admin sidebar"
+      >
+        <div className="flex items-center justify-between h-16 px-4 border-b border-navy-100">
+          {!sidebarCollapsed && (
+            <Link to="/admin" className="flex items-center gap-3 text-navy-900 font-display font-bold text-xl hover:opacity-80 transition-opacity" aria-label="Admin Dashboard Home">
+              <span className="w-10 h-10 rounded-xl bg-navy-900 flex items-center justify-center text-white font-display font-bold text-lg">
+                RH
+              </span>
+              <span>Admin Dashboard</span>
+            </Link>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="lg:hidden p-2 text-navy-600 hover:bg-navy-100 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!sidebarCollapsed}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={sidebarCollapsed ? "M4 6h16M4 12h16M4 18h16" : "M6 18L18 6M6 6l12 12"} />
+            </svg>
           </button>
         </div>
-      </nav>
 
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {error && (
-          <div className="bg-red-50 text-red-600 px-4 py-3 rounded-lg mb-4 text-sm">{error}</div>
-        )}
-        {success && (
-          <div className="bg-green-50 text-green-600 px-4 py-3 rounded-lg mb-4 text-sm">{success}</div>
-        )}
-
-        <div className="flex gap-1 bg-white rounded-lg shadow-sm p-1 mb-6 overflow-x-auto">
+        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto" aria-label="Admin navigation">
           {adminTabs.map((tab) => (
             <button
               key={tab}
-              onClick={() => { setActiveTab(tab); setError(''); setSuccess(''); }}
-              className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition ${
+              onClick={() => {
+                setActiveTab(tab);
+                setError('');
+                setSuccess('');
+              }}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-body font-medium transition-all duration-200 ${
                 activeTab === tab
-                  ? 'bg-indigo-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
+                  ? 'bg-gold-50 text-gold-700 font-semibold'
+                  : 'text-navy-600 hover:bg-navy-50 hover:text-gold-600'
+              } ${sidebarCollapsed ? 'justify-center' : ''}`}
+              aria-current={activeTab === tab ? 'page' : undefined}
             >
-              {tab}
+              {!sidebarCollapsed && <span>{tab}</span>}
             </button>
           ))}
-        </div>
+        </nav>
 
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-gray-800">{activeTab}</h2>
+        <div className="p-4 border-t border-navy-100 lg:hidden">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="w-full px-4 py-2.5 bg-navy-100 text-navy-700 font-semibold text-body rounded-xl hover:bg-navy-200 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </aside>
+
+      <div className="flex-1 lg:pl-0 min-w-0">
+        <header className="sticky top-0 z-[var(--z-sticky)] bg-white border-b border-navy-100 lg:hidden">
+          <div className="flex items-center justify-between h-16 px-4">
             <button
-              onClick={() => openAdd(activeTab)}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition"
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 text-navy-600 hover:bg-navy-100 rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+              aria-label="Open sidebar"
+              aria-expanded={sidebarOpen}
             >
-              + Add {activeTab.slice(0, -1)}
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-bold text-navy-900">Admin Dashboard</h1>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-sm text-gold-600 hover:text-gold-700 font-medium"
+            >
+              Back to Dashboard
             </button>
           </div>
+        </header>
 
-          {/* Sermons */}
-          {activeTab === 'Sermons' && (
-            <div className="space-y-3">
-              {sermons.length === 0 && <p className="text-gray-400 text-sm">No sermons yet.</p>}
-              {sermons.map((item) => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h4 className="font-semibold text-gray-800">{item.title}</h4>
-                    <p className="text-sm text-gray-500">{item.speaker} - {item.date}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => openEdit('Sermons', item)} className="text-sm text-indigo-600 hover:text-indigo-800">Edit</button>
-                    <button onClick={() => handleDelete('Sermons', item._id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
-                  </div>
-                </div>
-              ))}
+        <div className="lg:pl-64 min-h-[calc(100vh-4rem)]">
+          <div className="container-custom py-8">
+            <div className="flex items-center justify-between mb-8">
+              <h1 className="text-2xl lg:text-3xl font-display font-bold text-navy-900">Admin Dashboard</h1>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => openAdd(activeTab)}
+                  className="px-4 py-2 bg-gold-500 text-white font-semibold text-body rounded-xl hover:bg-gold-600 hover:shadow-gold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2"
+                >
+                  + Add {activeTab.slice(0, -1)}
+                </button>
+                <button
+                  onClick={() => navigate('/dashboard')}
+                  className="px-4 py-2 bg-navy-100 text-navy-700 font-semibold text-body rounded-xl hover:bg-navy-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400 focus-visible:ring-offset-2"
+                >
+                  Back to Dashboard
+                </button>
+              </div>
             </div>
-          )}
 
-          {/* Events */}
-          {activeTab === 'Events' && (
-            <div className="space-y-3">
-              {events.length === 0 && <p className="text-gray-400 text-sm">No events yet.</p>}
-              {events.map((item) => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h4 className="font-semibold text-gray-800">{item.title}</h4>
-                    <p className="text-sm text-gray-500">{item.date} - {item.location}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => openEdit('Events', item)} className="text-sm text-indigo-600 hover:text-indigo-800">Edit</button>
-                    <button onClick={() => handleDelete('Events', item._id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
-                  </div>
-                </div>
-              ))}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm animate-slide-down" role="alert">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-6 p-4 bg-green-50 text-green-600 rounded-xl text-sm animate-slide-down" role="status">
+                {success}
+              </div>
+            )}
+
+            <div className="mb-6 overflow-x-auto">
+              <div className="flex gap-1 bg-white rounded-xl shadow-sm p-1 overflow-x-auto">
+                {adminTabs.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => { setActiveTab(tab); setError(''); setSuccess(''); }}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
+                      activeTab === tab
+                        ? 'bg-gold-500 text-white'
+                        : 'text-navy-600 hover:bg-navy-50 hover:text-gold-600'
+                    }`}
+                  >
+                    {tab}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
 
-          {/* Ministries */}
-          {activeTab === 'Ministries' && (
-            <div className="space-y-3">
-              {ministries.length === 0 && <p className="text-gray-400 text-sm">No ministries yet.</p>}
-              {ministries.map((item) => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h4 className="font-semibold text-gray-800">{item.name}</h4>
-                    <p className="text-sm text-gray-500">{item.description}</p>
-                  </div>
-                  <button onClick={() => handleDelete('Ministries', item._id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              {activeTab === 'Sermons' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full" role="grid">
+                    <thead className="bg-navy-50 border-b border-navy-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Title</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Speaker</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Date</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-navy-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {sermons.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-navy-400">No sermons yet.</td>
+                        </tr>
+                      ) : (
+                        sermons.map((item) => (
+                          <tr key={item._id} className="hover:bg-navy-50 transition-colors">
+                            <td className="px-4 py-4">
+                              <div className="font-semibold text-navy-900">{item.title}</div>
+                              {item.scripture && <div className="text-sm text-navy-500">{item.scripture}</div>}
+                            </td>
+                            <td className="px-4 py-4 text-navy-600">{item.speaker}</td>
+                            <td className="px-4 py-4 text-navy-600">{item.date}</td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openEdit('Sermons', item)}
+                                  className="px-3 py-1.5 text-sm font-medium text-gold-600 hover:bg-gold-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete('Sermons', item._id)}
+                                  className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* Gallery */}
-          {activeTab === 'Gallery' && (
-            <div className="space-y-3">
-              {gallery.length === 0 && <p className="text-gray-400 text-sm">No gallery items yet.</p>}
-              {gallery.map((item) => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    {item.imageUrl && (
-                      <img src={item.imageUrl} alt={item.title} className="w-16 h-16 object-cover rounded-lg" />
-                    )}
-                    <div>
-                      <h4 className="font-semibold text-gray-800">{item.title}</h4>
-                      <p className="text-sm text-gray-500">{item.description}</p>
+              {activeTab === 'Events' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full" role="grid">
+                    <thead className="bg-navy-50 border-b border-navy-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Title</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Date</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Location</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-navy-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {events.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-navy-400">No events yet.</td>
+                        </tr>
+                      ) : (
+                        events.map((item) => (
+                          <tr key={item._id} className="hover:bg-navy-50 transition-colors">
+                            <td className="px-4 py-4 font-semibold text-navy-900">{item.title}</td>
+                            <td className="px-4 py-4 text-navy-600">{item.date}</td>
+                            <td className="px-4 py-4 text-navy-600">{item.location}</td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openEdit('Events', item)}
+                                  className="px-3 py-1.5 text-sm font-medium text-gold-600 hover:bg-gold-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete('Events', item._id)}
+                                  className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeTab === 'Ministries' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full" role="grid">
+                    <thead className="bg-navy-50 border-b border-navy-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Name</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Description</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-navy-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {ministries.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-4 py-8 text-center text-navy-400">No ministries yet.</td>
+                        </tr>
+                      ) : (
+                        ministries.map((item) => (
+                          <tr key={item._id} className="hover:bg-navy-50 transition-colors">
+                            <td className="px-4 py-4 font-semibold text-navy-900">{item.name}</td>
+                            <td className="px-4 py-4 text-navy-600 max-w-xs truncate">{item.description}</td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => openEdit('Ministries', item)}
+                                  className="px-3 py-1.5 text-sm font-medium text-gold-600 hover:bg-gold-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete('Ministries', item._id)}
+                                  className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activeTab === 'Gallery' && (
+                <div className="p-4">
+                  {gallery.length === 0 ? (
+                    <p className="text-center text-navy-400 py-8">No gallery items yet.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {gallery.map((item) => (
+                        <div key={item._id} className="bg-navy-50 rounded-xl overflow-hidden border border-navy-100">
+                          {(item.image || item.imageUrl) && (
+                            <div className="aspect-video relative overflow-hidden">
+                              <img
+                                src={item.image || item.imageUrl}
+                                alt={item.title}
+                                className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                              />
+                            </div>
+                          )}
+                          <div className="p-4">
+                            <h4 className="font-semibold text-navy-900 mb-1">{item.title}</h4>
+                            <p className="text-sm text-navy-600 mb-3">{item.description}</p>
+                            <button
+                              onClick={() => handleDelete('Gallery', item._id)}
+                              className="w-full px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <button onClick={() => handleDelete('Gallery', item._id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
+              )}
 
-          {/* Announcements */}
-          {activeTab === 'Announcements' && (
-            <div className="space-y-3">
-              {announcements.length === 0 && <p className="text-gray-400 text-sm">No announcements yet.</p>}
-              {announcements.map((item) => (
-                <div key={item._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                  <div>
-                    <h4 className="font-semibold text-gray-800">{item.title}</h4>
-                    <p className="text-sm text-gray-500">{item.content}</p>
-                  </div>
-                  <button onClick={() => handleDelete('Announcements', item._id)} className="text-sm text-red-600 hover:text-red-800">Delete</button>
+              {activeTab === 'Announcements' && (
+                <div className="overflow-x-auto">
+                  <table className="w-full" role="grid">
+                    <thead className="bg-navy-50 border-b border-navy-100">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Title</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Content</th>
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-navy-600">Priority</th>
+                        <th className="px-4 py-3 text-right text-sm font-semibold text-navy-600">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-navy-100">
+                      {announcements.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center text-navy-400">No announcements yet.</td>
+                        </tr>
+                      ) : (
+                        announcements.map((item) => (
+                          <tr key={item._id} className="hover:bg-navy-50 transition-colors">
+                            <td className="px-4 py-4 font-semibold text-navy-900">{item.title}</td>
+                            <td className="px-4 py-4 text-navy-600 max-w-xs truncate">{item.content}</td>
+                            <td className="px-4 py-4">
+                              <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                item.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                                item.priority === 'important' ? 'bg-gold-100 text-gold-700' :
+                                'bg-navy-100 text-navy-700'
+                              }`}>
+                                {item.priority}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <button
+                                onClick={() => handleDelete('Announcements', item._id)}
+                                className="px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
+              )}
             </div>
-          )}
+          </div>
+
+          <Modal
+            open={modalOpen}
+            onClose={() => setModalOpen(false)}
+            title={`${editingId ? 'Edit' : 'Add'} ${activeTab.slice(0, -1)}`}
+          >
+            <form onSubmit={handleSave} className="space-y-4">
+              {activeTab === 'Sermons' && (
+                <>
+                  {renderFormField('Title', 'title')}
+                  {renderFormField('Speaker', 'speaker')}
+                  {renderFormField('Scripture', 'scripture')}
+                  {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
+                  {renderFormField('Date', 'date', 'date')}
+                </>
+              )}
+              {activeTab === 'Events' && (
+                <>
+                  {renderFormField('Title', 'title')}
+                  {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
+                  {renderFormField('Date', 'date', 'date')}
+                  {renderFormField('Time', 'time', 'time')}
+                  {renderFormField('Location', 'location')}
+                </>
+              )}
+              {activeTab === 'Ministries' && (
+                <>
+                  {renderFormField('Name', 'name')}
+                  {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
+                </>
+              )}
+              {activeTab === 'Gallery' && (
+                <>
+                  {renderFormField('Title', 'title')}
+                  {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
+                  <div>
+                    <label className="block text-sm font-medium text-navy-700 mb-1">Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => setGalleryFile(e.target.files[0])}
+                      className="w-full text-sm text-navy-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gold-50 file:text-gold-700 hover:file:bg-gold-100"
+                    />
+                  </div>
+                </>
+              )}
+              {activeTab === 'Announcements' && (
+                <>
+                  {renderFormField('Title', 'title')}
+                  {renderFormField('Content', 'content', 'text', { type: 'textarea' })}
+                  {renderFormField('Priority', 'priority', 'text', { type: 'select', options: ['normal', 'important', 'urgent'] })}
+                </>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-navy-600 bg-navy-100 rounded-xl hover:bg-navy-200 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-gold-500 rounded-xl hover:bg-gold-600 hover:shadow-gold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400"
+                >
+                  {editingId ? 'Update' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </Modal>
         </div>
       </div>
-
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={`${editingId ? 'Edit' : 'Add'} ${activeTab.slice(0, -1)}`}
-      >
-        <form onSubmit={handleSave} className="space-y-4">
-          {activeTab === 'Sermons' && (
-            <>
-              {renderFormField('Title', 'title')}
-              {renderFormField('Speaker', 'speaker')}
-              {renderFormField('Scripture', 'scripture')}
-              {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
-              {renderFormField('Date', 'date', 'date')}
-            </>
-          )}
-          {activeTab === 'Events' && (
-            <>
-              {renderFormField('Title', 'title')}
-              {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
-              {renderFormField('Date', 'date', 'date')}
-              {renderFormField('Time', 'time', 'time')}
-              {renderFormField('Location', 'location')}
-            </>
-          )}
-          {activeTab === 'Ministries' && (
-            <>
-              {renderFormField('Name', 'name')}
-              {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
-            </>
-          )}
-          {activeTab === 'Gallery' && (
-            <>
-              {renderFormField('Title', 'title')}
-              {renderFormField('Description', 'description', 'text', { type: 'textarea' })}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Image</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setGalleryFile(e.target.files[0])}
-                  className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                />
-              </div>
-            </>
-          )}
-          {activeTab === 'Announcements' && (
-            <>
-              {renderFormField('Title', 'title')}
-              {renderFormField('Content', 'content', 'text', { type: 'textarea' })}
-              {renderFormField('Priority', 'priority', 'text', { type: 'select', options: ['normal', 'important', 'urgent'] })}
-            </>
-          )}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition"
-            >
-              {editingId ? 'Update' : 'Create'}
-            </button>
-          </div>
-        </form>
-      </Modal>
     </div>
   );
 }

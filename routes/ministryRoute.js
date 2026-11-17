@@ -1,6 +1,7 @@
 const express = require("express");
 const auth = require("../Middleware/auth");
 const authorize = require("../Middleware/authorize");
+const { validateObjectId } = require("../Middleware/validateObjectId");
 const {
     createMinistry,
     getMinistries,
@@ -15,10 +16,10 @@ router.post("/", auth, authorize("admin"), createMinistry);
 
 router.get("/", getMinistries);
 
-router.get("/:id", getMinistry);
+router.get("/:id", validateObjectId(), getMinistry);
 
-router.put("/:id", auth, authorize("admin"), updateMinistry);
+router.put("/:id", auth, authorize("admin"), validateObjectId(), updateMinistry);
 
-router.delete("/:id", auth, authorize("admin"), deleteMinistry);
+router.delete("/:id", auth, authorize("admin"), validateObjectId(), deleteMinistry);
 
 module.exports = router;

@@ -1,141 +1,221 @@
-const transporter = require("../Config/email");
+const crypto = require("node:crypto");
+const { getEmailConfig, getResendClient, getSmtpTransporter, sanitizeProviderError } = require("../Config/email");
+const { buildEmail } = require("./emailTemplates");
 
-const CHURCH_NAME = "Royal Higher Life Ministries";
-const CHURCH_PHONE = "+234 800 000 0000";
-const CHURCH_EMAIL = "info@royalhigherlife.org";
-const CHURCH_ADDRESS = "Lagos, Nigeria";
-const WEBSITE_URL = "https://royalhigherlife.org";
+const MINISTRY = "Royal Higher Life Ministries";
+const ministryRecipient = () => process.env.MINISTRY_NOTIFICATION_EMAIL?.trim();
+const notConfigured = () => Promise.resolve({ sent: false, reason: "not_configured", provider: getEmailConfig().provider });
 
-function buildConfirmationHTML(name, bodyContent) {
-    return `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;background:#f9f9f9;">
-      <div style="background:#0B5ED7;color:#fff;padding:20px;text-align:center;border-radius:8px 8px 0 0;">
-        <h1 style="margin:0;font-size:22px;">${CHURCH_NAME}</h1>
-      </div>
-      <div style="background:#fff;padding:30px;border-radius:0 0 8px 8px;">
-        <p style="font-size:16px;color:#333;">Dear <strong>${name}</strong>,</p>
-        <div style="font-size:15px;color:#444;line-height:1.7;margin:20px 0;">
-          ${bodyContent}
-        </div>
-        <p style="font-size:15px;color:#444;">Thank you for reaching out to us. We truly appreciate your time and will get back to you as soon as possible.</p>
-        <p style="font-size:15px;color:#444;">God bless you.</p>
-        <hr style="border:none;border-top:1px solid #eee;margin:25px 0;">
-        <div style="font-size:13px;color:#888;text-align:center;">
-          <p style="margin:4px 0;"><strong>${CHURCH_NAME}</strong></p>
-          <p style="margin:4px 0;">${CHURCH_ADDRESS}</p>
-          <p style="margin:4px 0;">Phone: ${CHURCH_PHONE} | Email: ${CHURCH_EMAIL}</p>
-          <p style="margin:4px 0;"><a href="${WEBSITE_URL}" style="color:#0B5ED7;">${WEBSITE_URL}</a></p>
-        </div>
-      </div>
-    </div>`;
-}
+async function sendEmail({ to, subject, html, text, idempotencyKey, replyTo }) {
+    const recipients = Array.isArray(to) ? to : [to];
+    const validEmail = (value) => typeof value === "string" && /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(value.trim());
+    if (!recipients.length || recipients.some((recipient) => !validEmail(recipient)) || typeof subject !== "string" || /[\r\n]/.test(subject)) {
+        console.warn("Email delivery skipped: invalid recipient or subject.");
+        return { sent: false, reason: "invalid_input" };
+    }
+    const config = getEmailConfig();
+    if (!config.configured) {
+        console.warn("Email delivery skipped: active provider configuration is incomplete.", { provider: config.provider, reason: config.reason });
+        return { sent: false, reason: "not_configured", provider: config.provider };
+    }
 
-async function sendEmail(to, subject, html) {
     try {
-        const info = await transporter.sendMail({
-            from: `"${CHURCH_NAME}" <${process.env.EMAIL_USER}>`,
-            to,
-            subject,
-            html,
-        });
-        console.log("Email sent:", info.response);
-        return info;
+        const message = { from: config.from, to, subject, html, text };
+        if (replyTo && validEmail(replyTo)) message.replyTo = replyTo.trim();
+        else if (!replyTo && process.env.EMAIL_REPLY_TO && validEmail(process.env.EMAIL_REPLY_TO.trim())) {
+            message.replyTo = process.env.EMAIL_REPLY_TO.trim();
+        }
+        if (config.provider === "gmail-smtp") {
+            const info = await getSmtpTransporter().sendMail(message);
+            if (!Array.isArray(info.accepted) || info.accepted.length < recipients.length) {
+                return { sent: false, reason: "provider_error", providerCode: "smtp_recipient_rejected", provider: config.provider };
+            }
+            const id = typeof info.messageId === "string" ? info.messageId : null;
+            return { sent: true, accepted: true, id, provider: config.provider, deliveryStatus: "unknown" };
+        }
+        if (config.provider === "resend") {
+            const client = getResendClient();
+            if (!client) return { sent: false, reason: "not_configured", provider: config.provider };
+            const { data, error } = await client.emails.send(message, idempotencyKey ? { idempotencyKey } : undefined);
+            if (error) {
+                const providerStatus = Number.isInteger(error.statusCode) ? error.statusCode : null;
+                const providerCode = typeof error.name === "string"
+                    ? error.name.toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60)
+                    : "provider_error";
+                console.error("Email provider rejected a message.", { provider: config.provider, name: providerCode, status: providerStatus });
+                return { sent: false, reason: "provider_error", providerCode, provider: config.provider, ...(providerStatus ? { providerStatus } : {}) };
+            }
+            return { sent: true, accepted: true, id: data?.id || null, provider: config.provider, deliveryStatus: "unknown" };
+        }
+        return { sent: false, reason: "unsupported_provider" };
     } catch (error) {
-        console.error("Email sending failed:", error.message);
-        return null;
+        const safeError = sanitizeProviderError(error);
+        console.error("Email delivery request failed.", { provider: config.provider, ...safeError });
+        return { sent: false, ...safeError, provider: config.provider };
     }
 }
 
-async function sendContactConfirmation(email, name) {
-    const html = buildConfirmationHTML(name, `
-        <p>We have received your message and our team will review it shortly.</p>
-        <p>If your matter is urgent, please don't hesitate to call us directly at ${CHURCH_PHONE}.</p>
-    `);
-    return sendEmail(email, `Thank You for Contacting Us - ${CHURCH_NAME}`, html);
+async function sendTemplatedEmail({ to, subject, template, values, idempotencyKey, replyTo }) {
+    const message = buildEmail(template, values);
+    return sendEmail({ to, subject, ...message, idempotencyKey, replyTo });
 }
 
-async function sendPrayerConfirmation(email, name) {
-    const html = buildConfirmationHTML(name, `
-        <p>We have received your prayer request and want you to know that our prayer team is standing with you.</p>
-        <p>Your request is being lifted up in prayer, and we believe in the power of God to work in your situation.</p>
-        <p><em>"The prayer of a righteous person is powerful and effective." — James 5:16</em></p>
-    `);
-    return sendEmail(email, `Your Prayer Request Has Been Received - ${CHURCH_NAME}`, html);
+function stableKey(type, id) {
+    const digest = crypto.createHash("sha256").update(`${type}:${id}`).digest("hex");
+    return `${type}-${digest.slice(0, 48)}`;
 }
 
-async function sendDonationConfirmation(email, name, amount, currency) {
-    const html = buildConfirmationHTML(name, `
-        <p>We have received your generous donation of <strong>${currency} ${amount}</strong>.</p>
-        <p>Your generosity helps us further God's kingdom and serve our community. A receipt for your records is included below.</p>
-        <div style="background:#f0f7ff;padding:15px;border-radius:6px;margin:15px 0;">
-          <p style="margin:4px 0;"><strong>Amount:</strong> ${currency} ${amount}</p>
-          <p style="margin:4px 0;"><strong>Date:</strong> ${new Date().toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" })}</p>
-        </div>
-    `);
-    return sendEmail(email, `Donation Received - Thank You - ${CHURCH_NAME}`, html);
-}
+const sendVerificationEmail = (user, token) => {
+    const url = `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/verify-email?token=${encodeURIComponent(token)}`;
+    return sendTemplatedEmail({
+        to: user.email,
+        subject: `Welcome to ${MINISTRY} — verify your email`,
+        template: "verification",
+        values: { name: user.firstName, url },
+        idempotencyKey: stableKey("verification", `${user.id}:${token}`),
+    });
+};
 
-async function sendEventRegistrationConfirmation(email, name, eventTitle) {
-    const html = buildConfirmationHTML(name, `
-        <p>You are now registered for <strong>${eventTitle}</strong>.</p>
-        <p>Please mark your calendar and arrive a few minutes early. We look forward to seeing you there!</p>
-    `);
-    return sendEmail(email, `Registration Confirmed: ${eventTitle} - ${CHURCH_NAME}`, html);
-}
+const sendPasswordResetEmail = (user, token) => {
+    const url = `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/reset-password/${encodeURIComponent(token)}`;
+    return sendTemplatedEmail({
+        to: user.email,
+        subject: `Reset your ${MINISTRY} password`,
+        template: "passwordReset",
+        values: { name: user.firstName, url },
+        idempotencyKey: stableKey("password-reset", `${user.id}:${token}`),
+    });
+};
 
-async function sendNewsletterConfirmation(email, firstName) {
-    const name = firstName || "there";
-    const html = buildConfirmationHTML(name, `
-        <p>You have been subscribed to our newsletter.</p>
-        <p>You will receive updates about upcoming events, sermons, and church news directly in your inbox.</p>
-        <p>You can unsubscribe at any time by clicking the unsubscribe link at the bottom of any email.</p>
-    `);
-    return sendEmail(email, `Welcome to Our Newsletter - ${CHURCH_NAME}`, html);
-}
+const sendPasswordChangedEmail = (user, eventId) => sendTemplatedEmail({
+    to: user.email, subject: `Your ${MINISTRY} password was changed`, template: "securityNotice",
+    values: { name: user.firstName }, idempotencyKey: stableKey("password-changed", `${user.id}:${eventId}`),
+});
 
-async function sendOTPEmail(email, firstName, otp) {
-    const name = firstName || "there";
-    const html = buildConfirmationHTML(name, `
-        <p>Your verification code is:</p>
-        <div style="font-size:32px;font-weight:bold;text-align:center;background:#f4f4f4;padding:20px;border-radius:8px;letter-spacing:6px;margin:20px 0;">
-          ${otp}
-        </div>
-        <p>This code expires in <strong>10 minutes</strong>.</p>
-        <p>If you didn't request this email, please ignore it.</p>
-    `);
-    return sendEmail(email, `Email Verification Code - ${CHURCH_NAME}`, html);
-}
+const sendContactConfirmation = (email, name, reference, id, submittedAt) => sendTemplatedEmail({
+    to: email, subject: `We received your message — ${MINISTRY}`, template: "contactConfirmation",
+    values: { name, reference, submittedAt }, idempotencyKey: id ? stableKey("contact-confirmation", id) : undefined,
+});
 
-async function sendWelcomeEmail(email, firstName) {
-    const html = buildConfirmationHTML(firstName, `
-        <p>Your email has been successfully verified.</p>
-        <p>We're excited to have you as part of the ${CHURCH_NAME} family.</p>
-    `);
-    return sendEmail(email, `Welcome to ${CHURCH_NAME}`, html);
-}
+const sendPrayerConfirmation = (email, name, reference, id, submittedAt) => sendTemplatedEmail({
+    to: email, subject: `We received your prayer request — ${MINISTRY}`, template: "prayerConfirmation",
+    values: { name, reference, submittedAt }, idempotencyKey: id ? stableKey("prayer-confirmation", id) : undefined,
+});
 
-async function sendPasswordResetOTP(email, otp) {
-    const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;padding:20px;">
-      <h2>Password Reset</h2>
-      <p>Your password reset code is:</p>
-      <div style="font-size:32px;font-weight:bold;text-align:center;background:#f4f4f4;padding:20px;border-radius:8px;letter-spacing:6px;">
-        ${otp}
-      </div>
-      <p>This code expires in <strong>10 minutes</strong>.</p>
-      <p>If you didn't request a password reset, please ignore this email.</p>
-    </div>`;
-    return sendEmail(email, `Password Reset Code - ${CHURCH_NAME}`, html);
-}
+const sendAdminContactNotification = (contact) => {
+    const to = ministryRecipient();
+    if (!to) return notConfigured();
+    return sendTemplatedEmail({
+        to, subject: "New website contact message", template: "adminContact",
+        values: {
+            ...contact,
+            submittedAt: contact.createdAt ? new Date(contact.createdAt).toISOString() : new Date().toISOString(),
+        }, idempotencyKey: stableKey("admin-contact", contact.id), replyTo: contact.email,
+    });
+};
+
+const sendAdminPrayerNotification = (request) => {
+    const to = ministryRecipient();
+    if (!to) return notConfigured();
+    return sendTemplatedEmail({
+        to, subject: "New website prayer request", template: "adminPrayer",
+        values: {
+            ...request,
+            submittedAt: request.createdAt ? new Date(request.createdAt).toISOString() : new Date().toISOString(),
+            adminUrl: `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/admin`,
+        }, idempotencyKey: stableKey("admin-prayer", request.id),
+    });
+};
+
+const sendVolunteerConfirmation = (volunteer) => sendTemplatedEmail({
+    to: volunteer.email,
+    subject: `We received your volunteer application — ${MINISTRY}`,
+    template: "volunteerConfirmation",
+    values: { name: volunteer.name, reference: volunteer.reference, submittedAt: volunteer.createdAt ? new Date(volunteer.createdAt).toISOString() : new Date().toISOString() },
+    idempotencyKey: stableKey("volunteer-confirmation", volunteer.id),
+});
+
+const sendAdminVolunteerNotification = (volunteer) => {
+    const to = ministryRecipient();
+    if (!to) return notConfigured();
+    return sendTemplatedEmail({
+        to, subject: "New website volunteer application", template: "adminVolunteer",
+        values: { ...volunteer, submittedAt: volunteer.createdAt ? new Date(volunteer.createdAt).toISOString() : new Date().toISOString() },
+        idempotencyKey: stableKey("admin-volunteer", volunteer.id), replyTo: volunteer.email,
+    });
+};
+
+const sendTestimonyConfirmation = (email, name, reference, id, submittedAt) => sendTemplatedEmail({
+    to: email,
+    subject: `We received your testimony — ${MINISTRY}`,
+    template: "testimonyConfirmation",
+    values: { name, reference, submittedAt },
+    idempotencyKey: id ? stableKey("testimony-confirmation", id) : undefined,
+});
+
+const sendAdminTestimonyNotification = (testimony) => {
+    const to = ministryRecipient();
+    if (!to) return notConfigured();
+    return sendTemplatedEmail({
+        to,
+        subject: "New testimony awaiting review — Royal Higher Life Ministries",
+        template: "adminTestimony",
+    values: {
+        ...testimony,
+        submittedAt: testimony.createdAt ? new Date(testimony.createdAt).toISOString() : new Date().toISOString(),
+        adminUrl: `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/admin`,
+    },
+        idempotencyKey: stableKey("admin-testimony", testimony.id),
+        replyTo: testimony.email,
+    });
+};
+
+const sendDonationConfirmation = (email, name, amount, currency, id, reference) => sendTemplatedEmail({
+    to: email, subject: `Thank you for your gift — ${MINISTRY}`, template: "donationConfirmation",
+    values: { name, amount, currency, reference, trackingUrl: `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/donations/track` }, idempotencyKey: id ? stableKey("donation-confirmation", id) : undefined,
+});
+
+const sendDonationTrackingCode = (email, code, id) => sendTemplatedEmail({
+    to: email, subject: `Your donation verification code — ${MINISTRY}`, template: "donationTracking",
+    values: { code }, idempotencyKey: id ? stableKey("donation-tracking", `${id}:${code}`) : undefined,
+});
+
+const sendEventRegistrationConfirmation = (email, name, eventTitle, id, cancelUrl) => sendTemplatedEmail({
+    to: email, subject: `Registration confirmed: ${eventTitle}`, template: "eventConfirmation",
+    values: { name, eventTitle, cancelUrl }, idempotencyKey: id ? stableKey("event-confirmation", id) : undefined,
+});
+
+const sendAdminEventRegistrationNotification = (registration) => {
+    const to = ministryRecipient();
+    if (!to) return notConfigured();
+    return sendTemplatedEmail({
+        to, subject: `New event registration: ${registration.eventTitle}`, template: "adminEventRegistration",
+        values: { ...registration }, idempotencyKey: stableKey("admin-event-registration", registration.id), replyTo: registration.email,
+    });
+};
+
+const sendNewsletterConfirmation = (email, firstName, id, unsubscribeUrl) => sendTemplatedEmail({
+    to: email, subject: `Welcome to ${MINISTRY} updates`, template: "newsletterConfirmation",
+    values: { name: firstName || "friend", unsubscribeUrl }, idempotencyKey: id ? stableKey("newsletter-confirmation", `${id}:${unsubscribeUrl}`) : undefined,
+});
 
 module.exports = {
     sendEmail,
+    verifyEmailTransport: require("../Config/email").verifyEmailTransport,
+    sendVerificationEmail,
+    sendPasswordResetEmail,
+    sendPasswordChangedEmail,
     sendContactConfirmation,
     sendPrayerConfirmation,
+    sendAdminContactNotification,
+    sendAdminPrayerNotification,
+    sendVolunteerConfirmation,
+    sendAdminVolunteerNotification,
+    sendTestimonyConfirmation,
+    sendAdminTestimonyNotification,
     sendDonationConfirmation,
+    sendDonationTrackingCode,
     sendEventRegistrationConfirmation,
+    sendAdminEventRegistrationNotification,
     sendNewsletterConfirmation,
-    sendOTPEmail,
-    sendWelcomeEmail,
-    sendPasswordResetOTP,
 };

@@ -3,13 +3,16 @@ const authService = require("../services/authService");
 
 // Register
 const register = asyncHandler(async (req, res) => {
-    const user = await authService.registerUser(req.body);
+    const { user, verificationEmailSent } = await authService.registerUser(req.body);
 
-   res.status(201).json({
-    success: true,
-    message: "Registration successful. Please check your email for the verification code.",
-    data: user,
-     });
+    res.status(201).json({
+        success: true,
+        message: verificationEmailSent
+            ? "Account created. Check your email for a verification link."
+            : "Account created, but a verification email could not be sent. You can request another link.",
+        verificationEmailSent,
+        data: user,
+    });
 
 });
 
@@ -41,7 +44,7 @@ const resendOTP = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        message: "A new OTP has been sent to your email.",
+        message: "If an unverified account matches that email, a verification link can be sent.",
     });
 });
 
@@ -51,7 +54,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        message: "Password reset email sent successfully.",
+        message: "If an account matches that email, password reset instructions can be sent when email delivery is available.",
     });
 });
 

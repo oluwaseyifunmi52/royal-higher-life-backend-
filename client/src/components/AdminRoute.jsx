@@ -14,7 +14,10 @@ export default function AdminRoute({ children }) {
     }
     getProfile()
       .then((data) => setIsAdmin(data.role === 'admin'))
-      .catch(() => setIsAdmin(false))
+      .catch((err) => {
+        console.error('Admin role check failed:', err.response?.status, err.message);
+        setIsAdmin(false);
+      })
       .finally(() => setLoading(false));
   }, [token]);
 

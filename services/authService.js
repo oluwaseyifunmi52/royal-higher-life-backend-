@@ -2,8 +2,7 @@ const bcrypt = require("bcryptjs");
 const User = require("../Models/user");
 const crypto = require("crypto");
 const { signToken } = require("../utils/jwt");
-const { sendEmail } = require("../utils/mailer");
-const { generateOTP } = require("../utils/otp");
+const { sendVerificationEmail, sendPasswordResetEmail, sendPasswordChangedEmail } = require("../utils/mailer");
 const ApiError = require("../utils/apiError");
 
 // Register User
@@ -30,28 +29,28 @@ const registerUser = async (userData) => {
         lastname ||
         name?.split(" ").slice(1).join(" ") ||
         "Member";
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const normalizedPhone = typeof phone === "string" ? phone.trim() : "";
+    const validName = (value) => typeof value === "string" && value.trim().length > 0 && value.trim().length <= 100;
 
-    if (
-        !resolvedFirstName ||
-        !resolvedLastName ||
-        !email ||
-        !phone ||
-        !password
-    ) {
-        throw new ApiError(400, "All fields are required.");
+    if (!validName(resolvedFirstName) || !validName(resolvedLastName) ||
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) || normalizedEmail.length > 254 ||
+        normalizedPhone.length < 5 || normalizedPhone.length > 40 ||
+        typeof password !== "string" || password.length < 8 || password.length > 128) {
+        throw new ApiError(400, "Enter valid account details and a password between 8 and 128 characters.");
     }
 
     if (confirmPassword && password !== confirmPassword) {
         throw new ApiError(400, "Passwords do not match.");
     }
 
-    const emailExists = await User.findOne({ email });
+    const emailExists = await User.findOne({ email: normalizedEmail });
 
     if (emailExists) {
-        throw new ApiError(400, "Email already exists.");
+        throw new ApiError(400, "An account cannot be created with the supplied details.");
     }
 
-    const phoneExists = await User.findOne({ phone });
+    const phoneExists = await User.findOne({ phone: normalizedPhone });
 
     if (phoneExists) {
         throw new ApiError(400, "Phone number already exists.");
@@ -59,81 +58,60 @@ const registerUser = async (userData) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const otp = generateOTP();
+    const verificationToken = crypto.randomBytes(32).toString("hex");
 
     const user = await User.create({
         firstName: resolvedFirstName,
         lastName: resolvedLastName,
-        email,
-        phone,
+        email: normalizedEmail,
+        phone: normalizedPhone,
         password: hashedPassword,
         country,
         state,
         gender,
         newsletter,
-        otp,
-        otpExpires: new Date(Date.now() + 10 *60 * 1000), // OTP expires in 10 minutes
+        otp: crypto.createHash("sha256").update(verificationToken).digest("hex"),
+        otpExpires: new Date(Date.now() + 10 * 60 * 1000),
     });
 
-    // Send welcome email
-    try {
-        await sendEmail(
-            user.email,
-            "Welcome to Royal Higher Life Ministries",
-            `
-        <div style="font-family: Arial, sans-serif; line-height:1.6;">
-            <h2>Welcome, ${user.firstName}!</h2>
-
-            <p>Your account has been created successfully.</p>
-
-            <p>
-                Thank you for joining <strong>Royal Higher Life Ministries</strong>.
-                We are delighted to have you as part of our community.
-            </p>
-
-            <p>God bless you.</p>
-
-            <br>
-
-            <p><strong>Royal Higher Life Ministries</strong></p>
-        </div>
-        `
-        );
-
-        await sendEmail(
-            user.email,
-            "Verify Your Email",
-            `
-        <h2>Royal Higher Life Ministries</h2>
-
-        <p>Hello ${user.firstName},</p>
-
-        <p>Your verification code is:</p>
-
-        <h1 style="letter-spacing:5px;">${otp}</h1>
-
-        <p>This code expires in 10 minutes.</p>
-        `
-        );
-    } catch (emailError) {
-        console.error("Failed to send registration emails:", emailError.message);
-    }
+    const delivery = await sendVerificationEmail(user, verificationToken);
 
 
-    user.password = undefined;
+    const safeUser = user.toObject();
+    delete safeUser.password;
+    delete safeUser.otp;
+    delete safeUser.otpExpires;
+    delete safeUser.resetPasswordToken;
+    delete safeUser.resetPasswordExpires;
 
-    return user;
+    return { user: safeUser, verificationEmailSent: delivery.sent };
 };
 
-// Verify email with OTP
-const verifyEmail = async ({ email, otp }) => {
-    if (!email || !otp) {
-        throw new ApiError(400, "Email and OTP are required.");
+// Verify an email address using a short-lived, one-time link token.
+const verifyEmail = async ({ email, otp, token }) => {
+    if (token) {
+        const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+        const user = await User.findOne({
+            $or: [{ otp: tokenHash }, { otp: token }],
+            otpExpires: { $gt: Date.now() },
+            isEmailVerified: false,
+        });
+        if (!user) throw new ApiError(400, "Invalid or expired verification link.");
+        user.otp = null;
+        user.otpExpires = null;
+        user.isEmailVerified = true;
+        await user.save();
+        return true;
     }
 
+    // Compatibility with verification codes issued before the link flow rollout.
+    if (!email || !otp) throw new ApiError(400, "Email and verification code are required.");
     const user = await User.findOne({
-        email,
-        otp,
+        email: email.toLowerCase().trim(),
+        $or: [
+            { otp: crypto.createHash("sha256").update(String(otp)).digest("hex") },
+            { otp: String(otp) },
+        ],
         otpExpires: { $gt: Date.now() },
     });
 
@@ -156,30 +134,15 @@ const resendOTP = async (email) => {
         throw new ApiError(400, "Email is required.");
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
 
-    if (!user) {
-        throw new ApiError(404, "No account found with this email.");
+    if (user && !user.isEmailVerified) {
+        const token = crypto.randomBytes(32).toString("hex");
+        user.otp = crypto.createHash("sha256").update(token).digest("hex");
+        user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        await user.save();
+        await sendVerificationEmail(user, token);
     }
-
-    const otp = generateOTP();
-
-    user.otp = otp;
-    user.otpExpires = new Date(Date.now() + 10 * 60 * 1000);
-
-    await user.save();
-
-    await sendEmail(
-        user.email,
-        "Verify Your Email",
-        `
-        <h2>Royal Higher Life Ministries</h2>
-        <p>Hello ${user.firstName},</p>
-        <p>Your new verification code is:</p>
-        <h1 style="letter-spacing:5px;">${otp}</h1>
-        <p>This code expires in 10 minutes.</p>
-        `
-    );
 
     return true;
 };
@@ -195,16 +158,17 @@ const resetPassword = async ({
         throw new ApiError(400, "Reset token is required.");
     }
 
-    if (!password) {
-        throw new ApiError(400, "Password is required.");
+    if (typeof password !== "string" || password.length < 8 || password.length > 128) {
+        throw new ApiError(400, "Password must be between 8 and 128 characters.");
     }
 
     if (confirmPassword && password !== confirmPassword) {
         throw new ApiError(400, "Passwords do not match.");
     }
 
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
     const user = await User.findOne({
-        resetPasswordToken: token,
+        $or: [{ resetPasswordToken: tokenHash }, { resetPasswordToken: token }],
         resetPasswordExpires: { $gt: Date.now() },
     }).select("+password");
 
@@ -218,6 +182,7 @@ const resetPassword = async ({
     user.resetPasswordExpires = null;
 
     await user.save();
+    await sendPasswordChangedEmail(user, user.updatedAt?.toISOString() || Date.now());
 
     return true;
 };
@@ -225,59 +190,27 @@ const resetPassword = async ({
 
 // forgotPassword
 const forgotPassword = async (email) => {
-    const user = await User.findOne({ email });
-
-    if (!user) {
-        throw new ApiError(404, "No account found with this email.");
+    const user = await User.findOne({ email: String(email || "").toLowerCase().trim() });
+    if (user) {
+        const resetToken = crypto.randomBytes(32).toString("hex");
+        user.resetPasswordToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+        user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
+        await user.save();
+        await sendPasswordResetEmail(user, resetToken);
     }
-
-    const resetToken = crypto.randomBytes(32).toString("hex");
-
-    user.resetPasswordToken = resetToken;
-
-    user.resetPasswordExpires = Date.now() + 15 * 60 * 1000;
-
-    await user.save();
-
-    const frontendUrl =
-        process.env.FRONTEND_URL || "https://royal-higher-life-9ttr.vercel.app";
-
-    const resetLink =
-        `${frontendUrl}/reset-password/${resetToken}`;
-
-    await sendEmail(
-        user.email,
-        "Reset Your Password",
-        `
-        <h2>Royal Higher Life Ministries</h2>
-
-        <p>Hello ${user.firstName},</p>
-
-        <p>Click the button below to reset your password.</p>
-
-        <a href="${resetLink}"
-           style="
-             background:#1e3a8a;
-             color:#fff;
-             padding:12px 20px;
-             text-decoration:none;
-             border-radius:5px;
-           ">
-           Reset Password
-        </a>
-
-        <p>This link expires in 15 minutes.</p>
-        `
-    );
 
     return true;
 };
 
 // Login User
-const loginUser = async ({ email, password }) => {
-    const user = await User.findOne({ email }).select("+password");
+const loginUser = async ({ email, password } = {}) => {
+    const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : "";
+    if (!normalizedEmail || typeof password !== "string" || password.length > 128) {
+        throw new ApiError(401, "Invalid email or password.");
+    }
+    const user = await User.findOne({ email: normalizedEmail }).select("+password");
 
-    if (!user) {
+    if (!user || typeof user.password !== "string") {
         throw new ApiError(401, "Invalid email or password.");
     }
 
@@ -302,15 +235,31 @@ const loginUser = async ({ email, password }) => {
 
 // Get Profile
 const getProfile = async (userId) => {
-    return await User.findById(userId).select("-password");
+    return await User.findById(userId).select("-password -otp -otpExpires -resetPasswordToken -resetPasswordExpires");
 };
 
 // Update Profile
-const updateProfile = async (userId, data) => {
-    return await User.findByIdAndUpdate(userId, data, {
+const PROFILE_FIELDS = new Set(["firstName", "lastName", "phone", "country", "state", "gender", "newsletter", "profileImage"]);
+
+const filterProfileUpdates = (data = {}) => Object.fromEntries(
+    Object.entries(data).filter(([key, value]) => {
+        if (!PROFILE_FIELDS.has(key) || value === undefined) return false;
+        if (key === "profileImage") return typeof value === "string" && value.startsWith("https://res.cloudinary.com/");
+        return true;
+    })
+);
+
+const updateProfile = async (userId, data = {}) => {
+    const updates = filterProfileUpdates(data);
+    if (Object.keys(updates).length === 0) {
+        throw new ApiError(400, "No supported profile fields were supplied.");
+    }
+    const user = await User.findByIdAndUpdate(userId, { $set: updates }, {
         new: true,
         runValidators: true,
-    }).select("-password");
+    }).select("-password -otp -otpExpires -resetPasswordToken -resetPasswordExpires");
+    if (!user) throw new ApiError(404, "User not found.");
+    return user;
 };
 
 // Change Password
@@ -325,6 +274,10 @@ const changePassword = async (
         throw new ApiError(404, "User not found.");
     }
 
+    if (typeof user.password !== "string") {
+        throw new ApiError(400, "This account does not have a password yet. Use Forgot Password to set one.");
+    }
+
     const isMatch = await bcrypt.compare(
         currentPassword,
         user.password
@@ -337,6 +290,7 @@ const changePassword = async (
     user.password = await bcrypt.hash(newPassword, 10);
 
     await user.save();
+    await sendPasswordChangedEmail(user, user.updatedAt?.toISOString() || Date.now());
 
     return true;
 };
@@ -351,4 +305,5 @@ module.exports = {
     changePassword,
     forgotPassword,
     resetPassword,
+    filterProfileUpdates,
 };

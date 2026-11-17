@@ -1,83 +1,122 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { subscribeNewsletter } from '../../services/newsletterService';
 
 export default function Footer() {
-  const [email, setEmail] = useState('');
-  const [msg, setMsg] = useState('');
+  const currentYear = new Date().getFullYear();
 
-  const handleSubscribe = async (e) => {
-    e.preventDefault();
-    try {
-      await subscribeNewsletter({ email });
-      setMsg('Subscribed successfully!');
-      setEmail('');
-    } catch {
-      setMsg('Subscription failed. Try again.');
-    }
+  const footerLinks = {
+    quick: [
+      { to: '/', label: 'Home' },
+      { to: '/about', label: 'About Us' },
+      { to: '/leadership', label: 'Leadership' },
+      { to: '/sermons', label: 'Sermons' },
+      { to: '/events', label: 'Events' },
+      { to: '/gallery', label: 'Gallery' },
+      { to: '/ministries', label: 'Ministries' },
+      { to: '/donate', label: 'Give' },
+      { to: '/contact', label: 'Contact' },
+    ],
+    ministries: [
+      { to: '/ministries#worship', label: 'Worship' },
+      { to: '/ministries#prayer', label: 'Prayer' },
+      { to: '/ministries#evangelism', label: 'Evangelism' },
+      { to: '/ministries#outreach', label: 'Outreach' },
+      { to: '/ministries#discipleship', label: 'Discipleship' },
+      { to: '/ministries#youth', label: 'Youth & Children' },
+    ],
+    connect: [
+      { to: '/donate', label: 'Give Online' },
+      { to: '/events', label: 'Upcoming Events' },
+      { to: '/sermons', label: 'Watch Sermons' },
+      { to: '/prayer', label: 'Submit Prayer' },
+      { to: '/volunteer', label: 'Volunteer' },
+    ],
   };
 
   return (
-    <footer className="bg-gray-900 text-gray-300">
-      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
-        <div>
-          <h3 className="text-white text-lg font-bold mb-2">Royal Higher Life</h3>
-          <p className="text-sm">
-            A ministry dedicated to transforming lives through the power of
-            God's Word, prayer, and community outreach.
-          </p>
-        </div>
+    <footer className="bg-navy-900 text-navy-100" role="contentinfo">
+      <div className="container-custom py-16 lg:py-20">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 lg:gap-12">
+          <div className="lg:col-span-2">
+            <Link to="/" className="flex items-center gap-3 text-white font-display font-bold text-2xl lg:text-3xl hover:opacity-80 transition-opacity" aria-label="Royal HigherLife Christian Ministries - Home">
+              <span className="w-12 h-12 lg:w-14 lg:h-14 rounded-xl bg-white flex items-center justify-center text-navy-900 font-display font-bold text-xl lg:text-2xl">
+                RH
+              </span>
+              <span>Royal HigherLife</span>
+            </Link>
+            <p className="mt-4 max-w-xs text-navy-200 text-body leading-relaxed">
+              A ministry dedicated to transforming lives through the power of
+              God's Word, prayer, and community outreach.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-4" role="list" aria-label="Social media links">
+              <a href="#" className="w-10 h-10 rounded-xl bg-navy-700 text-navy-100 flex items-center justify-center hover:bg-navy-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400" aria-label="Facebook">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>
+              </a>
+              <a href="#" className="w-10 h-10 rounded-xl bg-navy-700 text-navy-100 flex items-center justify-center hover:bg-navy-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400" aria-label="Twitter / X">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25h8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+              </a>
+              <a href="#" className="w-10 h-10 rounded-xl bg-navy-700 text-navy-100 flex items-center justify-center hover:bg-navy-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400" aria-label="Instagram">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.601 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.163-6.162-6.163zm0 10.162c-2.209 0-4-1.79-4-4s1.791-4 4-4 4 1.791 4 4-1.791 4-4 4z" /></svg>
+              </a>
+              <a href="#" className="w-10 h-10 rounded-xl bg-navy-700 text-navy-100 flex items-center justify-center hover:bg-navy-600 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400" aria-label="YouTube">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>
+              </a>
+            </div>
+          </div>
 
-        <div>
-          <h4 className="text-white font-semibold mb-3">Quick Links</h4>
-          <ul className="space-y-2 text-sm">
-            <li><Link to="/" className="hover:text-white">Home</Link></li>
-            <li><Link to="/about" className="hover:text-white">About</Link></li>
-            <li><Link to="/contact" className="hover:text-white">Contact</Link></li>
-            <li><Link to="/donate" className="hover:text-white">Donate</Link></li>
-            <li><Link to="/events" className="hover:text-white">Events</Link></li>
-          </ul>
-        </div>
+          <div>
+            <h3 className="text-white font-semibold text-heading-sm mb-4">Quick Links</h3>
+            <ul className="space-y-3 text-body-sm" role="list">
+              {footerLinks.quick.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className="text-navy-200 hover:text-gold-400 transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        <div>
-          <h4 className="text-white font-semibold mb-3">Contact Info</h4>
-          <ul className="space-y-2 text-sm">
-            <li>123 Ministry Street, Lagos, Nigeria</li>
-            <li>+234 800 123 4567</li>
-            <li>info@royalhigherlife.org</li>
-          </ul>
-        </div>
+          <div>
+            <h3 className="text-white font-semibold text-heading-sm mb-4">Ministries</h3>
+            <ul className="space-y-3 text-body-sm" role="list">
+              {footerLinks.ministries.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className="text-navy-200 hover:text-gold-400 transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
 
-        <div>
-          <h4 className="text-white font-semibold mb-3">Newsletter</h4>
-          <form onSubmit={handleSubscribe} className="flex">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Your email"
-              required
-              className="flex-1 px-3 py-2 text-sm text-gray-900 rounded-l-lg focus:outline-none"
-            />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-r-lg hover:bg-indigo-700"
-            >
-              Subscribe
-            </button>
-          </form>
-          {msg && <p className="text-xs mt-1 text-green-400">{msg}</p>}
-          <div className="flex space-x-4 mt-4">
-            <a href="#" className="hover:text-white">Facebook</a>
-            <a href="#" className="hover:text-white">Twitter</a>
-            <a href="#" className="hover:text-white">Instagram</a>
-            <a href="#" className="hover:text-white">YouTube</a>
+          <div>
+            <h3 className="text-white font-semibold text-heading-sm mb-4">Connect</h3>
+            <ul className="space-y-3 text-body-sm" role="list">
+              {footerLinks.connect.map((link) => (
+                <li key={link.to}>
+                  <Link to={link.to} className="text-navy-200 hover:text-gold-400 transition-colors">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
-      </div>
 
-      <div className="border-t border-gray-700 text-center py-4 text-sm">
-        &copy; {new Date().getFullYear()} Royal Higher Life. All rights reserved.
+        <div className="mt-12 lg:mt-16 border-t border-navy-700 pt-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <p className="text-navy-300 text-body-sm">
+              &copy; {currentYear} Royal HigherLife Christian Ministries. All rights reserved.
+            </p>
+            <div className="flex flex-wrap items-center gap-4 text-body-sm text-navy-300">
+              <Link to="/privacy" className="hover:text-gold-400 transition-colors">Privacy Policy</Link>
+              <span aria-hidden="true">·</span>
+              <Link to="/terms" className="hover:text-gold-400 transition-colors">Terms of Service</Link>
+              <span aria-hidden="true">·</span>
+              <a href="mailto:info@royalhigherlife.org" className="hover:text-gold-400 transition-colors">info@royalhigherlife.org</a>
+            </div>
+          </div>
+        </div>
       </div>
     </footer>
   );

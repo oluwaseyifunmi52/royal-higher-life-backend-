@@ -14,8 +14,12 @@ export default function Home() {
   const [newsMsg, setNewsMsg] = useState('');
 
   useEffect(() => {
-    getEvents().then(setEvents).catch(() => {});
-    getReviews().then(setReviews).catch(() => {});
+    getEvents().then(setEvents).catch((err) => {
+      console.error('Failed to load events:', err.response?.status, err.message);
+    });
+    getReviews().then(setReviews).catch((err) => {
+      console.error('Failed to load reviews:', err.response?.status, err.message);
+    });
   }, []);
 
   const handleContact = async (e) => {

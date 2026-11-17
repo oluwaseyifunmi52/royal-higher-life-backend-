@@ -11,6 +11,7 @@ const getOverview = asyncHandler(async (req, res) => {
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const twelveMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 11, 1);
+    const verifiedDonation = { status: "successful", verifiedAt: { $ne: null } };
 
     const [
         totalMembers,
@@ -34,6 +35,7 @@ const getOverview = asyncHandler(async (req, res) => {
         PrayerRequest.countDocuments({ isAnswered: true }),
         Review.countDocuments({ isApproved: false }),
         Donation.aggregate([
+            { $match: verifiedDonation },
             {
                 $group: {
                     _id: null,
@@ -48,7 +50,7 @@ const getOverview = asyncHandler(async (req, res) => {
             },
         ]),
         Donation.aggregate([
-            { $match: { createdAt: { $gte: twelveMonthsAgo } } },
+            { $match: { ...verifiedDonation, createdAt: { $gte: twelveMonthsAgo } } },
             {
                 $group: {
                     _id: {
@@ -62,7 +64,7 @@ const getOverview = asyncHandler(async (req, res) => {
             { $sort: { "_id.year": 1, "_id.month": 1 } },
         ]),
         Donation.aggregate([
-            { $match: { isAnonymous: { $ne: true } } },
+            { $match: { ...verifiedDonation, isAnonymous: { $ne: true } } },
             {
                 $group: {
                     _id: "$donorName",
@@ -73,7 +75,7 @@ const getOverview = asyncHandler(async (req, res) => {
             { $sort: { totalAmount: -1 } },
             { $limit: 5 },
         ]),
-        Donation.find().sort({ createdAt: -1 }).limit(8),
+        Donation.find(verifiedDonation).sort({ verifiedAt: -1 }).limit(8),
         Contact.find().sort({ createdAt: -1 }).limit(8),
         User.find().select("-password -otp -resetPasswordToken").sort({ createdAt: -1 }).limit(8),
         Event.find({ date: { $gte: today } }).sort({ date: 1 }).limit(8),

@@ -1,6 +1,7 @@
 const express = require("express");
 const auth = require("../Middleware/auth");
-const adminMiddleware = require("../Middleware/adminMiddleware");
+const authorize = require("../Middleware/authorize");
+const { validateObjectId } = require("../Middleware/validateObjectId");
 const {
     getCalendarEvents,
     createCalendarEvent
@@ -12,6 +13,6 @@ const router = express.Router();
 router.get("/", getCalendarEvents);
 
 // Admin create event
-router.post("/", auth, adminMiddleware, createCalendarEvent);
+router.post("/", auth, authorize("admin"), createCalendarEvent);
 
 module.exports = router;

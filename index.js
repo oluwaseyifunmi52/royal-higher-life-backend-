@@ -1,8 +1,5 @@
 require("dotenv").config();
 
-const dns = require("node:dns");
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
-
 const express = require("express");
 const morgan = require("morgan");
 const helmet = require("helmet");
@@ -11,9 +8,11 @@ const cookieParser = require("cookie-parser");
 const { connectDB } = require("./Config/db");
 const { corsMiddleware } = require("./Config/cors");
 const { cloudinary } = require("./Config/cloudinary");
+const { authLimiter, publicSubmissionLimiter, passwordResetLimiter, uploadLimiter } = require("./Middleware/rateLimiter");
 
 // Routes
 const authRoutes = require("./routes/authRoute");
+const socialAuthRoutes = require("./routes/socialAuthRoute");
 const reviewRoutes = require("./routes/reviewRoute");
 const contactRoutes = require("./routes/contactRoute");
 const donationRoutes = require("./routes/donationRoute");
@@ -31,30 +30,59 @@ const eventRegistrationRoutes = require("./routes/eventRegistrationRoute");
 const volunteerRoutes = require("./routes/volunteerRoute");
 const partnershipRoutes = require("./routes/partnershipRoute");
 const announcementRoutes = require("./routes/announcementRoute");
+const leadershipRoutes = require("./routes/leadershipRoute");
 
 // Middlewares
 const notFound = require("./Middleware/notFound");
 const errorHandler = require("./Middleware/errorHandler");
 
 const app = express();
+// Render terminates TLS and forwards one trusted proxy hop. Keep client-IP based limits accurate.
+app.set("trust proxy", process.env.NODE_ENV === "production" ? 1 : false);
 const PORT = process.env.PORT || 8000;
 
 app.use(helmet({
-    crossOriginResourcePolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginEmbedderPolicy: false,
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
+        },
+    },
+    hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+    },
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    noSniff: true,
+    xssFilter: true,
+    frameguard: { action: "deny" },
 }));
 app.use(morgan("dev"));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "1mb", verify: (req, res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
 app.use(corsMiddleware);
 
 app.get("/health", (req, res) => {
+    const cloudinaryConfigured = [
+        process.env.CLOUDINARY_CLOUD_NAME,
+        process.env.CLOUDINARY_API_KEY,
+        process.env.CLOUDINARY_API_SECRET,
+    ].every((value) => typeof value === "string" && value.trim().length > 0);
     res.status(200).json({
         success: true,
         message: "Royal HigherLife Backend is running",
-        cloudinaryConfigured: Boolean(cloudinary?.config?.cloud_name),
+        cloudinaryConfigured,
     });
 });
 
@@ -62,6 +90,31 @@ app.get("/", (req, res) => {
     res.status(200).json({ message: "Royal HigherLife API is running" });
 });
 
+// Apply rate limiting to specific routes
+app.use("/api/auth/register", authLimiter);
+app.use("/api/auth/login", authLimiter);
+app.use("/api/auth/social", authLimiter);
+// Backward-compatible auth aliases must share the same brute-force limits.
+app.use("/api/users/register", authLimiter);
+app.use("/api/users/login", authLimiter);
+app.use("/api/auth/verify-email", authLimiter);
+app.use("/api/auth/resend-otp", authLimiter);
+app.use("/api/auth/forgot-password", passwordResetLimiter);
+app.use("/api/auth/reset-password", passwordResetLimiter);
+
+app.use("/api/reviews", publicSubmissionLimiter);
+app.use("/api/contacts", publicSubmissionLimiter);
+app.use("/api/prayers", publicSubmissionLimiter);
+app.use("/api/donations", publicSubmissionLimiter);
+app.use("/api/event-registrations", publicSubmissionLimiter);
+app.use("/api/volunteers", publicSubmissionLimiter);
+app.use("/api/partnerships", publicSubmissionLimiter);
+app.use("/api/newsletter", publicSubmissionLimiter);
+app.post("/api/gallery", uploadLimiter);
+app.put("/api/gallery/:id", uploadLimiter);
+app.put("/api/auth/profile-image", uploadLimiter);
+
+app.use("/api/auth/social", socialAuthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/reviews", reviewRoutes);
 app.use("/api/contacts", contactRoutes);
@@ -80,6 +133,7 @@ app.use("/api/event-registrations", eventRegistrationRoutes);
 app.use("/api/volunteers", volunteerRoutes);
 app.use("/api/partnerships", partnershipRoutes);
 app.use("/api/announcements", announcementRoutes);
+app.use("/api/leadership", leadershipRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -93,7 +147,8 @@ const startServer = async () => {
         });
 
     } catch (error) {
-        console.error(error);
+        console.error(`Server startup aborted: ${error.message}`);
+        process.exitCode = 1;
     }
 };
 

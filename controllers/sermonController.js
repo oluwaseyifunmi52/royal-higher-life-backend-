@@ -4,7 +4,7 @@ const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
 
 const createSermon = asyncHandler(async (req, res) => {
-    const { title, preacher, speaker, description, date, sermonDate, ...rest } = req.body;
+    const { title, preacher, speaker, description, date, sermonDate, imageUrl, image, ...rest } = req.body;
 
     if (!title || !(preacher || speaker) || !description) {
         throw new ApiError(400, "Title, preacher/speaker, and description are required");
@@ -15,6 +15,7 @@ const createSermon = asyncHandler(async (req, res) => {
         title,
         preacher: preacher || speaker,
         description,
+        image: image || imageUrl,
         sermonDate: sermonDate || date || new Date(),
     };
 
@@ -24,14 +25,19 @@ const createSermon = asyncHandler(async (req, res) => {
 });
 
 const getSermons = asyncHandler(async (req, res) => {
-    const sermons = await Sermon.find().sort({ sermonDate: -1 });
+    const sermons = await Sermon.find({ isPublished: { $ne: false } }).sort({ sermonDate: -1 });
     res.status(200).json(new ApiResponse(200, "Sermons fetched successfully", sermons));
+});
+
+const getAllSermonsAdmin = asyncHandler(async (_req, res) => {
+    const sermons = await Sermon.find().sort({ sermonDate: -1 });
+    res.status(200).json(new ApiResponse(200, "All sermons fetched successfully", sermons));
 });
 
 const getSermon = asyncHandler(async (req, res) => {
     const sermon = await Sermon.findById(req.params.id);
 
-    if (!sermon) {
+    if (!sermon || sermon.isPublished === false) {
         throw new ApiError(404, "Sermon not found");
     }
 
@@ -39,10 +45,11 @@ const getSermon = asyncHandler(async (req, res) => {
 });
 
 const updateSermon = asyncHandler(async (req, res) => {
-    const { preacher, speaker, date, sermonDate, ...rest } = req.body;
+    const { preacher, speaker, date, sermonDate, imageUrl, image, ...rest } = req.body;
     const updateData = { ...rest };
     if (preacher || speaker) updateData.preacher = preacher || speaker;
     if (sermonDate || date) updateData.sermonDate = sermonDate || date;
+    if (image || imageUrl) updateData.image = image || imageUrl;
 
     const sermon = await Sermon.findByIdAndUpdate(
         req.params.id,
@@ -70,6 +77,7 @@ const deleteSermon = asyncHandler(async (req, res) => {
 module.exports = {
     createSermon,
     getSermons,
+    getAllSermonsAdmin,
     getSermon,
     updateSermon,
     deleteSermon,

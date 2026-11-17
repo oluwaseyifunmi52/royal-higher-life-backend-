@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
         },
         password: {
             type: String,
-            required: true,
+            required: function passwordRequired() { return this.provider === "local"; },
             minlength: 8,
             select: false,
         },
@@ -37,9 +37,22 @@ const userSchema = new mongoose.Schema(
 
        phone: {
             type: String,
-            required: true,
+            required: function phoneRequired() { return this.provider === "local"; },
             unique: true,
+            sparse: true,
             trim: true,
+        },
+
+        provider: {
+            type: String,
+            enum: ["local", "google", "facebook"],
+            default: "local",
+        },
+
+        providerId: {
+            type: String,
+            default: undefined,
+            select: false,
         },
 
         country: {
@@ -83,27 +96,36 @@ const userSchema = new mongoose.Schema(
         resetPasswordToken: {
             type: String,
             default: null,
+            select: false,
         },
 
         resetPasswordExpires: {
             type: Date,
             default: null,
+            select: false,
         },
 
         otp: {
             type: String,
             default: null,
+            select: false,
         },
 
         otpExpires: {
             type: Date,
             default: null,
+            select: false,
         },
 
     },
     {
         timestamps: true,
     }
+);
+
+userSchema.index(
+    { provider: 1, providerId: 1 },
+    { unique: true, partialFilterExpression: { providerId: { $type: "string" } } }
 );
 
 

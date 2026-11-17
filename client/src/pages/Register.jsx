@@ -52,7 +52,7 @@ export default function Register() {
     setError('');
     try {
       await register(form);
-      setSuccess('Check your email for a verification code.');
+      setSuccess('Your account has been created. Please check your inbox for the verification link.');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

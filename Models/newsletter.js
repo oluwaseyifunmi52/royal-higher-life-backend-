@@ -24,6 +24,9 @@ const newsletterSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        unsubscribeTokenHash: { type: String, select: false },
+        unsubscribeTokenExpires: { type: Date, select: false },
+        confirmationSentAt: { type: Date, select: false },
     },
     { timestamps: true }
 );

@@ -1,88 +1,58 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const User = require("../Models/user");
+const authService = require("../services/authService");
 
-// Register
+const sensitiveUserFields = ["password", "otp", "otpExpires", "resetPasswordToken", "resetPasswordExpires"];
+const publicUser = (user) => {
+    const result = user?.toObject ? user.toObject() : { ...user };
+    for (const field of sensitiveUserFields) delete result[field];
+    return result;
+};
+const filterAdminUserUpdates = (body = {}) => {
+    const updates = authService.filterProfileUpdates(body);
+    for (const [field, value] of Object.entries(updates)) {
+        if (typeof value === "string" && field !== "profileImage") {
+            updates[field] = value.trim().slice(0, field === "email" ? 254 : field === "phone" ? 40 : 100);
+        }
+    }
+    if (typeof body.email === "string") {
+        updates.email = body.email.trim().toLowerCase().slice(0, 254);
+    }
+    if (body.role === "admin" || body.role === "member") updates.role = body.role;
+    if (typeof body.isActive === "boolean") updates.isActive = body.isActive;
+    return updates;
+};
+
+// Backward-compatible registration alias; keep the primary verification and hashing flow.
 const register = async (req, res) => {
     try {
-        const { firstName, lastName, email, password } = req.body;
-
-        const exists = await User.findOne({ email });
-
-        if (exists) {
-            return res.status(400).json({
-                success: false,
-                message: "Email already exists",
-            });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const user = await User.create({
-            firstName,
-            lastName,
-            email,
-            password: hashedPassword,
-        });
-
-        res.status(201).json({
+        const { user, verificationEmailSent } = await authService.registerUser(req.body);
+        return res.status(201).json({
             success: true,
-            message: "Registration successful",
-            data: user,
+            message: verificationEmailSent
+                ? "Account created. Check your email for a verification link."
+                : "Account created, but a verification email could not be sent. You can request another link.",
+            verificationEmailSent,
+            data: publicUser(user),
         });
     } catch (error) {
-        res.status(500).json({
+        const status = error.statusCode || 500;
+        return res.status(status).json({
             success: false,
-            message: error.message,
+            message: status < 500 ? error.message : "Unable to complete registration right now.",
         });
     }
 };
 
-// Login
+// Login alias; reuse the primary authentication service and never serialize credential fields.
 const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
-
-        const user = await User.findOne({ email }).select("+password");
-
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid email or password",
-            });
-        }
-
-        const isMatch = await bcrypt.compare(password, user.password);
-
-        if (!isMatch) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid email or password",
-            });
-        }
-
-        const token = jwt.sign(
-            {
-                id: user._id,
-                role: user.role,
-            },
-            process.env.JWT_SECRET,
-            {
-                expiresIn: "7d",
-            }
-        );
-
-        user.password = undefined;
-
-        res.status(200).json({
-            success: true,
-            token,
-            data: user,
-        });
+        const { token, user } = await authService.loginUser(req.body);
+        return res.status(200).json({ success: true, token, data: publicUser(user) });
     } catch (error) {
-        res.status(500).json({
+        const status = error.statusCode || 500;
+        return res.status(status).json({
             success: false,
-            message: error.message,
+            message: status < 500 ? error.message : "Unable to complete sign in right now.",
         });
     }
 };
@@ -95,12 +65,12 @@ const getUsers = async (req, res) => {
         res.status(200).json({
             success: true,
             count: users.length,
-            data: users,
+            data: users.map(publicUser),
         });
-    } catch (error) {
+    } catch {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Unable to fetch users right now.",
         });
     }
 };
@@ -119,12 +89,12 @@ const getUser = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            data: user,
+            data: publicUser(user),
         });
-    } catch (error) {
+    } catch {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Unable to fetch this user right now.",
         });
     }
 };
@@ -132,7 +102,11 @@ const getUser = async (req, res) => {
 // Update User
 const updateUser = async (req, res) => {
     try {
-        const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+        const updates = filterAdminUserUpdates(req.body);
+        if (!Object.keys(updates).length) {
+            return res.status(400).json({ success: false, message: "No editable user fields were provided." });
+        }
+        const user = await User.findByIdAndUpdate(req.params.id, updates, {
             new: true,
             runValidators: true,
         });
@@ -147,12 +121,12 @@ const updateUser = async (req, res) => {
         res.status(200).json({
             success: true,
             message: "User updated successfully",
-            data: user,
+            data: publicUser(user),
         });
-    } catch (error) {
+    } catch {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Unable to update this user right now.",
         });
     }
 };
@@ -173,10 +147,10 @@ const deleteUser = async (req, res) => {
             success: true,
             message: "User deleted successfully",
         });
-    } catch (error) {
+    } catch {
         res.status(500).json({
             success: false,
-            message: error.message,
+            message: "Unable to delete this user right now.",
         });
     }
 };
@@ -188,4 +162,5 @@ module.exports = {
     getUser,
     updateUser,
     deleteUser,
+    filterAdminUserUpdates,
 };

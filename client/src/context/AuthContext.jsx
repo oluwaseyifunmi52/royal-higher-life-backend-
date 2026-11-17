@@ -14,7 +14,8 @@ export default function AuthProvider({ children }) {
     if (token) {
       getProfile()
         .then((data) => setUser(data))
-        .catch(() => {
+        .catch((err) => {
+          console.error('Auth profile error:', err.response?.status, err.message);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
         })

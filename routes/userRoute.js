@@ -1,4 +1,7 @@
 const express = require("express");
+const auth = require("../Middleware/auth");
+const authorize = require("../Middleware/authorize");
+const { validateObjectId } = require("../Middleware/validateObjectId");
 const {
     register,
     login,
@@ -10,16 +13,14 @@ const {
 
 const router = express.Router();
 
+// Public authentication routes (kept for backward compatibility - frontend uses /api/auth)
 router.post("/register", register);
-
 router.post("/login", login);
 
-router.get("/", getUsers);
-
-router.get("/:id", getUser);
-
-router.put("/:id", updateUser);
-
-router.delete("/:id", deleteUser);
+// Protected admin routes
+router.get("/", auth, authorize("admin"), getUsers);
+router.get("/:id", auth, authorize("admin"), validateObjectId(), getUser);
+router.put("/:id", auth, authorize("admin"), validateObjectId(), updateUser);
+router.delete("/:id", auth, authorize("admin"), validateObjectId(), deleteUser);
 
 module.exports = router;

@@ -21,7 +21,7 @@ exports.getDashboard = async (req, res) => {
             Event.countDocuments(),
             Sermon.countDocuments(),
             Ministry.countDocuments(),
-            Donation.countDocuments(),
+            Donation.countDocuments({ status: "successful", verifiedAt: { $ne: null } }),
             Contact.countDocuments({ status: "new" })
         ]);
 

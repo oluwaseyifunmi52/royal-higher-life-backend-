@@ -18,7 +18,7 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // Multer general errors
-    if (err.message && err.message.includes("Only image files")) {
+    if (err.message && /Only (?:valid )?image file/i.test(err.message)) {
         return res.status(400).json({
             success: false,
             message: err.message,

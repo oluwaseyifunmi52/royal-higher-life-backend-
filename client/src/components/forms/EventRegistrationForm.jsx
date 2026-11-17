@@ -17,7 +17,9 @@ export default function EventRegistrationForm() {
   useEffect(() => {
     getEvents()
       .then((data) => setEvents(data.events || data))
-      .catch(() => {});
+      .catch((err) => {
+      console.error('Failed to load events:', err.response?.status, err.message);
+    });
   }, []);
 
   const handleChange = (e) => {

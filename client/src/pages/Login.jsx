@@ -25,7 +25,11 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(res.user));
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed. Please try again.');
+      const msg = err.response?.data?.message || 
+                  err.message || 
+                  'Login failed. Please try again.';
+      setError(msg);
+      console.error('Login error:', err.response?.status, err.message);
     } finally {
       setLoading(false);
     }

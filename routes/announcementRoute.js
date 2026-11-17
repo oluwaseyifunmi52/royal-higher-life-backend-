@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../Middleware/auth");
 const authorize = require("../Middleware/authorize");
+const { validateObjectId } = require("../Middleware/validateObjectId");
 const {
     createAnnouncement,
     getAllAnnouncements,
@@ -11,7 +12,7 @@ const {
 
 router.post("/", auth, authorize("admin"), createAnnouncement);
 router.get("/", getAllAnnouncements);
-router.get("/:id", getAnnouncementById);
-router.delete("/:id", auth, authorize("admin"), deleteAnnouncement);
+router.get("/:id", validateObjectId(), getAnnouncementById);
+router.delete("/:id", auth, authorize("admin"), validateObjectId(), deleteAnnouncement);
 
 module.exports = router;

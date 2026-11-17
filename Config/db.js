@@ -1,46 +1,133 @@
+const dns = require("dns");
+const net = require("net");
 const mongoose = require("mongoose");
 
-const connectDB = async () => {
-    const mongoUris = [
-        process.env.MONGO_URI,
-        process.env.MONGO_URI_2 || "mongodb://127.0.0.1:27017/royal-backend",
-    ].filter(Boolean);
+const DNS_QUERY_SYSCALLS = new Set(["querySrv", "queryTxt", "queryA", "queryAaaa"]);
 
-    let lastError = null;
+function describeMongoUri(uri) {
+    try {
+        const parsed = new URL(uri);
+        const isSrv = parsed.protocol === "mongodb+srv:";
+        const isLoopback = ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname);
+        return {
+            host: parsed.hostname,
+            kind: isSrv ? "MongoDB Atlas SRV" : isLoopback ? "local MongoDB" : "configured MongoDB",
+        };
+    } catch {
+        return { host: "unknown host", kind: "configured MongoDB" };
+    }
+}
 
-    for (const mongoUri of mongoUris) {
-        try {
-            await mongoose.connect(mongoUri, {
-                serverSelectionTimeoutMS: 10000,
-                autoIndex: process.env.NODE_ENV === "development",
-            });
-
-            if (process.env.NODE_ENV === "development") {
-                console.log(`✅ MongoDB connected successfully.`);
-                console.log(`📂 Database: ${mongoose.connection.name}`);
-                console.log(`🌐 Host: ${mongoose.connection.host}`);
-            } else {
-                console.log("✅ MongoDB connected.");
-            }
-
-            return;
-        } catch (error) {
-            lastError = error;
-
-            if (process.env.NODE_ENV === "development") {
-                console.warn(`❌ Failed to connect to ${mongoUri}`);
-                console.warn(error.message);
-            }
+function getErrorCode(error) {
+    if (error?.code) return error.code;
+    if (error?.cause?.code) return error.cause.code;
+    const servers = error?.reason?.servers;
+    if (servers && typeof servers.values === "function") {
+        for (const server of servers.values()) {
+            if (server.error?.code) return server.error.code;
         }
     }
+    return error?.name || "MongoConnectionError";
+}
 
-    console.error("❌ Unable to connect to MongoDB.");
+function getErrorSyscall(error) {
+    return error?.syscall || error?.cause?.syscall || null;
+}
 
-    if (process.env.NODE_ENV === "development" && lastError) {
-        console.error(lastError);
+function isDnsError(error) {
+    if (DNS_QUERY_SYSCALLS.has(getErrorSyscall(error))) return true;
+    return /^query(Srv|Txt|A|Aaaa)\b/.test(error?.message || "");
+}
+
+function parseDnsServers(value) {
+    if (value == null) return [];
+    const servers = String(value)
+        .split(",")
+        .map((server) => server.trim())
+        .filter(Boolean);
+    const invalid = servers.filter((server) => net.isIP(server) === 0);
+    if (invalid.length > 0) {
+        throw new Error("NODE_DNS_SERVERS must be a comma-separated list of IP addresses (for example 8.8.8.8,8.8.4.4).");
+    }
+    return servers;
+}
+
+let dnsOverrideLogged = false;
+
+function applyDnsOverride() {
+    const servers = parseDnsServers(process.env.NODE_DNS_SERVERS);
+    if (servers.length === 0) return null;
+    dns.setServers(servers);
+    if (!dnsOverrideLogged) {
+        console.info("Node DNS resolver overridden for MongoDB lookup.", { servers });
+        dnsOverrideLogged = true;
+    }
+    return servers;
+}
+
+function describeConnectionError(error) {
+    const code = getErrorCode(error);
+    const syscall = getErrorSyscall(error);
+    const hostname = error?.hostname || error?.cause?.hostname || null;
+    const resolver = dns.getServers();
+
+    if (isDnsError(error)) {
+        const resolverList = resolver.length > 0 ? resolver.join(", ") : "none";
+        return {
+            phase: "dns",
+            code,
+            syscall,
+            hostname,
+            resolver,
+            message: `DNS resolution failed for the MongoDB Atlas SRV/TXT records (code: ${code}, query: ${syscall || "dns"}). Node's resolver is using: ${resolverList}. This is a local DNS resolver problem, not an Atlas network-access rejection. Fix the machine's DNS settings or set NODE_DNS_SERVERS.`,
+        };
     }
 
-    process.exit(1);
-};
+    const detail = code === "ENOTFOUND"
+        ? "DNS could not resolve the configured MongoDB host."
+        : code === "ECONNREFUSED"
+            ? "The configured MongoDB host refused the connection."
+            : "Check the MongoDB URI, cluster status, network access list, and DNS configuration.";
 
-module.exports = { connectDB };
+    return { phase: "connection", code, syscall, hostname, resolver, message: detail };
+}
+
+async function connectDB(options = {}) {
+    const mongoUri = process.env.MONGO_URI?.trim();
+    if (!mongoUri) {
+        throw new Error("Missing required environment variable MONGO_URI. No local database fallback is configured.");
+    }
+
+    const target = describeMongoUri(mongoUri);
+    applyDnsOverride();
+
+    try {
+        await mongoose.connect(mongoUri, {
+            serverSelectionTimeoutMS: 10000,
+            autoIndex: options.autoIndex ?? process.env.NODE_ENV === "development",
+        });
+
+        console.info("MongoDB connection established.", {
+            target: target.kind,
+            database: mongoose.connection.name,
+            host: mongoose.connection.host,
+        });
+        return mongoose.connection;
+    } catch (error) {
+        const described = describeConnectionError(error);
+        console.error("MongoDB connection failed.", {
+            target: target.kind,
+            host: target.host,
+            code: described.code,
+            phase: described.phase,
+            ...(described.phase === "dns" ? { query: described.syscall, resolver: described.resolver } : {}),
+        });
+
+        const startupError = new Error(`${described.message} Target: ${target.kind} at ${target.host} (code: ${described.code}).`);
+        startupError.code = described.code;
+        startupError.phase = described.phase;
+        throw startupError;
+    }
+}
+
+module.exports = { connectDB, describeMongoUri, describeConnectionError, parseDnsServers };

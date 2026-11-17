@@ -18,22 +18,34 @@ services:
       - key: JWT_EXPIRES_IN
         value: 14d
       - key: CORS_ORIGIN
-        value: https://royal-higher-life-9ttr.vercel.app,https://royal-higher-life-v9tt.vercel.app
+        value: https://royal-higher-life-ag25.vercel.app,https://royal-higher-life-9ttr.vercel.app,https://royal-higher-life-v9tt.vercel.app
       - key: FRONTEND_URL
-        value: https://royal-higher-life-9ttr.vercel.app
+        value: https://royal-higher-life-ag25.vercel.app
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+      - key: EMAIL_PROVIDER
+        value: gmail-smtp
       - key: EMAIL_HOST
         value: smtp.gmail.com
       - key: EMAIL_PORT
         value: "587"
+      - key: EMAIL_SECURE
+        value: "false"
       - key: EMAIL_USER
-        sync: false
+        value: royalhigherlifeoutreach@gmail.com
       - key: EMAIL_PASS
         sync: false
       - key: EMAIL_FROM
-        value: "Royal Higher Life Ministries"
+        value: Royal HigherLife Christian Ministries <royalhigherlifeoutreach@gmail.com>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_REPLY_TO
+        value: royalhigherlifeoutreach@gmail.com
+      - key: ADMIN_EMAIL
+        value: royalhigherlifeoutreach@gmail.com
+      - key: MINISTRY_NOTIFICATION_EMAIL
+        value: royalhigherlifeoutreach@gmail.com

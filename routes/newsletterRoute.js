@@ -10,6 +10,6 @@ const {
 
 router.post("/", subscribe);
 router.get("/", auth, authorize("admin"), getAllSubscribers);
-router.put("/unsubscribe/:email", unsubscribe);
+router.put("/unsubscribe", unsubscribe);
 
 module.exports = router;
