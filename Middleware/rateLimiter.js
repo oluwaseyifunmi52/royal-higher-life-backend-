@@ -33,6 +33,14 @@ const publicSubmissionLimiter = createRateLimiter({
     message: "Too many submissions, please try again later.",
 });
 
+// Paystack webhooks are signed and retried, so they must not share the low
+// public form-submission limit. This limit only throttles abusive delivery.
+const webhookLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: isProduction ? 1000 : 10000,
+    message: "Too many webhook events, please try again later.",
+});
+
 const passwordResetLimiter = createRateLimiter({
     windowMs: 60 * 60 * 1000,
     max: isProduction ? 3 : 10,
@@ -48,6 +56,7 @@ const uploadLimiter = createRateLimiter({
 module.exports = {
     authLimiter,
     publicSubmissionLimiter,
+    webhookLimiter,
     passwordResetLimiter,
     uploadLimiter,
     createRateLimiter,

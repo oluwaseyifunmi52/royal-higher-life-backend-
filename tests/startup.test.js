@@ -3,12 +3,13 @@ const assert = require("node:assert/strict");
 const express = require("express");
 const { once } = require("node:events");
 const { ipKeyGenerator } = require("express-rate-limit");
-const { authLimiter, publicSubmissionLimiter, passwordResetLimiter, createRateLimiter } = require("../Middleware/rateLimiter");
+const { authLimiter, publicSubmissionLimiter, webhookLimiter, passwordResetLimiter, createRateLimiter } = require("../Middleware/rateLimiter");
 const { connectDB, describeMongoUri, describeConnectionError, parseDnsServers } = require("../Config/db");
 
-test("the three rate limiters initialize and IPv6 addresses use subnet keys", () => {
+test("the rate limiters initialize and IPv6 addresses use subnet keys", () => {
     assert.equal(typeof authLimiter, "function");
     assert.equal(typeof publicSubmissionLimiter, "function");
+    assert.equal(typeof webhookLimiter, "function");
     assert.equal(typeof passwordResetLimiter, "function");
     assert.equal(ipKeyGenerator("2001:db8:abcd:12::1"), "2001:db8:abcd::/56");
     assert.equal(ipKeyGenerator("192.0.2.18"), "192.0.2.18");

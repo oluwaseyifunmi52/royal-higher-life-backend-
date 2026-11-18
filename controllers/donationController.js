@@ -6,21 +6,43 @@ const DonationAudit = require("../Models/donationAudit");
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
-const { initializePayment, verifyPayment, verifyWebhookSignature } = require("../services/paymentService");
+const paymentService = require("../services/paymentService");
 const { sendDonationConfirmation, sendDonationTrackingCode } = require("../utils/mailer");
 
 const FRONTEND_URL = () => (process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "");
+
+const PAYMENT_PROVIDERS = Object.freeze({
+    paystack: { id: "paystack", name: "Paystack" },
+});
+
+// A real Paystack key starts with sk_test_ or sk_live_ and has a substantial
+// key body. Presence of the variable alone is never proof of merchant eligibility.
+const PAYSTACK_SECRET_KEY_PATTERN = /^sk_(test|live)_[A-Za-z0-9]{16,}$/;
+const PAYSTACK_PLACEHOLDER_PATTERN = /(placeholder|replace[-_]?me|your[-_]?(secret|api)[-_]?key|example|dummy|fake|changeme|xxxx|000000|111111)/i;
+
+const normalizedPaystackCountry = () => String(process.env.PAYSTACK_ACCOUNT_COUNTRY || "").trim().toUpperCase();
+
+const paystackEnvironment = () => {
+    const nodeEnvironment = String(process.env.NODE_ENV || "development").trim().toLowerCase();
+    return ["production", "prod", "live"].includes(nodeEnvironment) ? "live" : "test";
+};
+
 /**
- * Checks if any NGN payment provider is configured.
- * Replaces the old Paystack-only check with a provider-agnostic function.
+ * Returns true only when the configured key looks genuine, is for the right
+ * account country, and matches the environment this backend is running in.
+ * Account eligibility still has to be confirmed in the Paystack dashboard.
  */
 const hasConfiguredNgnPaymentProvider = () => {
-    // Placeholder: will be replaced when OPay/Ecobank credentials are configured.
-    // Currently returns false so the backend gracefully reports
-    "donation payments between providers are between providers";
-    // TODO: when OPay/Ecobank merchant credentials are provided,
-    // update this function to check for their secret keys.
+    const secretKey = process.env.PAYSTACK_SECRET_KEY;
+    if (typeof secretKey !== "string" || secretKey !== secretKey.trim()) return false;
+    if (!PAYSTACK_SECRET_KEY_PATTERN.test(secretKey)) return false;
+    if (PAYSTACK_PLACEHOLDER_PATTERN.test(secretKey)) return false;
+    if (/^(.)\1+$/.test(secretKey.slice(secretKey.indexOf("_", 3) + 1))) return false;
+    if (normalizedPaystackCountry() !== "NG") return false;
+    return secretKey.startsWith("sk_test_") ? paystackEnvironment() === "test" : paystackEnvironment() === "live";
 };
+
+const getConfiguredDonationProviderIds = () => hasConfiguredNgnPaymentProvider() ? ["paystack"] : [];
 const safeDonation = (donation) => ({
     id: donation._id,
     donorName: donation.isAnonymous ? "Anonymous" : donation.donorName,
@@ -45,23 +67,12 @@ const createDonation = asyncHandler(async (req, res) => {
     const currencyConfig = DONATION_CURRENCIES.find((c) => c.code === normalizedCurrency);
     if (!currencyConfig) throw new ApiError(400, "Unsupported currency.");
     if (!Number.isFinite(parsedAmount) || parsedAmount < currencyConfig.minimum || parsedAmount > currencyConfig.maximum || Math.round(parsedAmount * 100) !== parsedAmount * 100) throw new ApiError(400, `Enter an amount between ${currencyConfig.symbol}${currencyConfig.minimum.toLocaleString()} and ${currencyConfig.symbol}${currencyConfig.maximum.toLocaleString()}.`);
-    // Determine supported payment providers.
-    // When no provider is configured, the system gracefully reports that
-    // donation payments are between providers and prompts the user to contact
-    // the church office. When OPay/Ecobank merchant credentials are provided,
-    // update this logic to include their IDs.
-    const configuredProviderIds = hasConfiguredNgnPaymentProvider()
-        ? ["paystack"]
-        : [];
-    if (configuredProviderIds.length === 0) {
-        // No payment provider configured — do not block the form.
-        // The frontend will show a message that donations are between providers.
-        throw new ApiError(
-            503,
-            "Donation payments are currently between providers. " +
-                "Please contact the church office for OPay/Ecobank integration."
-        );
-    }
+    // Only currencies with a genuinely implemented provider can be paid online.
+    if (currencyConfig.providerIds.length === 0)
+        throw new ApiError(400, "Online giving is not available for this currency yet.");
+    const configuredProviderIds = getConfiguredDonationProviderIds();
+    if (configuredProviderIds.length === 0)
+        throw new ApiError(503, "Donation payments are temporarily unavailable. Please contact the church office for other giving options.");
     if (!currencyConfig.providerIds.some((id) => configuredProviderIds.includes(id)))
         throw new ApiError(400, "Online giving is not available for this currency yet.");
     const resolvedPaymentMethod = configuredProviderIds.includes(req.body.paymentMethod)
@@ -92,7 +103,7 @@ const createDonation = asyncHandler(async (req, res) => {
         user: req.user?._id || null,
     });
     try {
-        const payment = await initializePayment({
+        const payment = await paymentService.initializePayment({
             email: normalizedEmail,
             amount: Math.round(parsedAmount * 100),
             currency: normalizedCurrency,
@@ -121,7 +132,7 @@ async function verifyAndFinalize(reference, eventId) {
     const donation = await Donation.findOne({ paymentReference: reference });
     if (!donation) return null;
     if (donation.status === "successful" && donation.verifiedAt) return donation;
-    const result = await verifyPayment(reference);
+    const result = await paymentService.verifyPayment(reference);
     const transaction = result?.data;
     const matches = result?.status === true && transaction?.status === "success" &&
         transaction.reference === reference && transaction.currency === donation.currency &&
@@ -194,7 +205,7 @@ const retryDonationReceipt = asyncHandler(async (req, res) => {
 });
 
 const paystackWebhook = asyncHandler(async (req, res) => {
-    if (!Buffer.isBuffer(req.rawBody) || !verifyWebhookSignature(req.rawBody, req.headers)) return res.status(401).json({ success: false });
+    if (!Buffer.isBuffer(req.rawBody) || !paymentService.verifyWebhookSignature(req.rawBody, req.headers)) return res.status(401).json({ success: false });
     const eventId = String(req.body?.data?.id || "");
     const reference = String(req.body?.data?.reference || "");
     if (req.body?.event !== "charge.success" || !reference || !eventId) return res.status(200).json({ received: true });
@@ -288,7 +299,7 @@ const DONATION_CURRENCIES = [
         presets: [5000, 10000, 25000, 50000, 100000],
         minimum: 100,
         maximum: 10000000,
-        providerIds: [],
+        providerIds: ["paystack"],
     },
     { code: "USD", name: "US Dollar", symbol: "$", decimals: 2, presets: [10, 25, 50, 100, 250], minimum: 2, maximum: 50000, providerIds: [] },
     { code: "GBP", name: "British Pound", symbol: "£", decimals: 2, presets: [5, 10, 25, 50, 100], minimum: 1, maximum: 40000, providerIds: [] },
@@ -300,21 +311,23 @@ const DONATION_CURRENCIES = [
     { code: "ZAR", name: "South African Rand", symbol: "R", decimals: 2, presets: [100, 250, 500, 1000, 2500], minimum: 10, maximum: 500000, providerIds: [] },
 ];
 
-// Public: advertise donation currency options.
-// When no payment provider is configured, all currencies are shown as
-// "unavailable" with a message to contact the church office for
-// OPay/Ecobank integration. When a provider is configured, only its
-// supported currencies are marked available.
+// Public: advertise donation currency options. Availability is derived from
+// the same eligibility check used by donation initialization, so the catalogue
+// never advertises a currency the backend cannot actually process.
 const getDonationCurrencies = asyncHandler(async (req, res) => {
-    // TODO: when OPay/Ecobank merchant credentials are provided,
-    // update this function to check for their providerIds in DONATION_CURRENCIES.
+    const configuredProviderIds = getConfiguredDonationProviderIds();
+    const providers = configuredProviderIds.map((id) => PAYMENT_PROVIDERS[id]).filter(Boolean);
     const currencies = DONATION_CURRENCIES.map(({ providerIds, ...currency }) => {
-        // Until OPay/Ecobank are configured, no currencies have active providers.
-        const supported = [];
+        const supported = providerIds
+            .filter((id) => configuredProviderIds.includes(id))
+            .map((id) => PAYMENT_PROVIDERS[id])
+            .filter(Boolean);
         const available = supported.length > 0;
         const unavailableReason = available
             ? null
-            : "No payment provider is configured. Contact the church office for OPay/Ecobank integration.";
+            : providerIds.length === 0
+                ? "Online giving is not available for this currency yet."
+                : "Online giving for this currency is temporarily unavailable.";
         return {
             ...currency,
             providers: supported,
@@ -329,9 +342,26 @@ const getDonationCurrencies = asyncHandler(async (req, res) => {
     const anyAvailable = currencies.some((currency) => currency.available);
     return res.status(200).json(new ApiResponse(
         200,
-        anyAvailable ? "Donation currencies fetched" : "Online giving is not configured yet. Contact the church office for OPay/Ecobank integration.",
-        { currencies, defaultCurrency, providers: [] }
+        anyAvailable ? "Donation currencies fetched" : "Online giving is not configured yet. Contact the church office for other giving options.",
+        { currencies, defaultCurrency, providers }
     ));
 });
 
-module.exports = { createDonation, verifyDonation, paystackWebhook, requestDonationTracking, confirmDonationTracking, retryDonationReceipt, getDonations, getDonationById, getMyDonations, getDonationAudit, updateDonation, deleteDonation, getDonationCurrencies };
+module.exports = {
+    createDonation,
+    verifyDonation,
+    paystackWebhook,
+    requestDonationTracking,
+    confirmDonationTracking,
+    retryDonationReceipt,
+    getDonations,
+    getDonationById,
+    getMyDonations,
+    getDonationAudit,
+    updateDonation,
+    deleteDonation,
+    getDonationCurrencies,
+    hasConfiguredNgnPaymentProvider,
+    getConfiguredDonationProviderIds,
+    DONATION_CURRENCIES,
+};

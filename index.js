@@ -8,7 +8,7 @@ const cookieParser = require("cookie-parser");
 const { connectDB } = require("./Config/db");
 const { corsMiddleware } = require("./Config/cors");
 const { cloudinary } = require("./Config/cloudinary");
-const { authLimiter, publicSubmissionLimiter, passwordResetLimiter, uploadLimiter } = require("./Middleware/rateLimiter");
+const { authLimiter, publicSubmissionLimiter, webhookLimiter, passwordResetLimiter, uploadLimiter } = require("./Middleware/rateLimiter");
 
 // Routes
 const authRoutes = require("./routes/authRoute");
@@ -105,7 +105,12 @@ app.use("/api/auth/reset-password", passwordResetLimiter);
 app.use("/api/reviews", publicSubmissionLimiter);
 app.use("/api/contacts", publicSubmissionLimiter);
 app.use("/api/prayers", publicSubmissionLimiter);
-app.use("/api/donations", publicSubmissionLimiter);
+// Signed Paystack webhooks must not consume the low public submission quota.
+app.use("/api/donations/webhook/paystack", webhookLimiter);
+app.use("/api/donations", (req, res, next) => {
+    if (req.path.replace(/\/$/, "") === "/webhook/paystack") return next();
+    return publicSubmissionLimiter(req, res, next);
+});
 app.use("/api/event-registrations", publicSubmissionLimiter);
 app.use("/api/volunteers", publicSubmissionLimiter);
 app.use("/api/partnerships", publicSubmissionLimiter);

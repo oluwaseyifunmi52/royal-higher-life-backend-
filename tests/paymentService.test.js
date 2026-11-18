@@ -3,26 +3,99 @@ const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { verifyWebhookSignature } = require("../services/paymentService");
 
+function withSignatureEnvironment(settings = {}, callback) {
+    const names = ["PAYSTACK_SECRET_KEY", "PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET_PREVIOUS"];
+    const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    for (const name of names) {
+        if (Object.hasOwn(settings, name)) {
+            if (settings[name] === undefined || settings[name] === null) delete process.env[name];
+            else process.env[name] = settings[name];
+        }
+    }
+    try {
+        callback();
+    } finally {
+        for (const name of names) {
+            if (previous[name] === undefined) delete process.env[name];
+            else process.env[name] = previous[name];
+        }
+    }
+}
+
+const sign = (secret, body) => crypto.createHmac("sha512", secret).update(body).digest("hex");
+const signTimestamped = (secret, timestamp, body) =>
+    crypto.createHmac("sha512", secret).update(`${timestamp}.`).update(body).digest("hex");
+
 test("Paystack legacy webhook signatures use SHA-512 and reject tampering", () => {
-    const previous = process.env.PAYSTACK_SECRET_KEY;
-    const previousWebhook = process.env.PAYSTACK_WEBHOOK_SECRET;
-    process.env.PAYSTACK_SECRET_KEY = "test_secret_key";
-    delete process.env.PAYSTACK_WEBHOOK_SECRET;
-    const body = Buffer.from('{"event":"charge.success","data":{"reference":"RHLM-test"}}');
-    const signature = crypto.createHmac("sha512", process.env.PAYSTACK_SECRET_KEY).update(body).digest("hex");
-    assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": signature }), true);
-    assert.equal(verifyWebhookSignature(Buffer.from("altered"), { "x-paystack-signature": signature }), false);
-    assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": "bad" }), false);
-    if (previous === undefined) delete process.env.PAYSTACK_SECRET_KEY; else process.env.PAYSTACK_SECRET_KEY = previous;
-    if (previousWebhook === undefined) delete process.env.PAYSTACK_WEBHOOK_SECRET; else process.env.PAYSTACK_WEBHOOK_SECRET = previousWebhook;
+    withSignatureEnvironment({ PAYSTACK_SECRET_KEY: "test_secret_key", PAYSTACK_WEBHOOK_SECRET: undefined }, () => {
+        const body = Buffer.from('{"event":"charge.success","data":{"reference":"RHLM-test"}}');
+        const signature = sign("test_secret_key", body);
+        assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": signature }), true);
+        assert.equal(verifyWebhookSignature(Buffer.from("altered"), { "x-paystack-signature": signature }), false);
+        assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": "bad" }), false);
+    });
 });
 
 test("Paystack timestamped signatures reject expired timestamps", () => {
-    const previous = process.env.PAYSTACK_WEBHOOK_SECRET;
-    process.env.PAYSTACK_WEBHOOK_SECRET = "webhook_secret";
-    const body = Buffer.from('{"event":"charge.success"}');
-    const timestamp = String(Math.floor(Date.now() / 1000) - 301);
-    const signature = crypto.createHmac("sha512", process.env.PAYSTACK_WEBHOOK_SECRET).update(`${timestamp}.${body}`).digest("hex");
-    assert.equal(verifyWebhookSignature(body, { "paystack-signature": `t=${timestamp},v1=${signature}` }), false);
-    if (previous === undefined) delete process.env.PAYSTACK_WEBHOOK_SECRET; else process.env.PAYSTACK_WEBHOOK_SECRET = previous;
+    withSignatureEnvironment({ PAYSTACK_WEBHOOK_SECRET: "whsec_test_secret" }, () => {
+        const body = Buffer.from('{"event":"charge.success"}');
+        const timestamp = String(Math.floor(Date.now() / 1000) - 301);
+        const signature = signTimestamped("whsec_test_secret", timestamp, body);
+        const header = `t=${timestamp},v1=whk_test:${signature}`;
+        assert.equal(verifyWebhookSignature(body, { "paystack-signature": header }), false);
+    });
+});
+
+test("modern Paystack-Signature verifies key identifiers and the raw body", () => {
+    withSignatureEnvironment({ PAYSTACK_WEBHOOK_SECRET: "whsec_current_secret", PAYSTACK_WEBHOOK_SECRET_PREVIOUS: undefined }, () => {
+        const body = Buffer.from('{"event":"charge.success","data":{"reference":"RHLM-modern"}}');
+        const timestamp = Math.floor(Date.now() / 1000);
+        const signature = signTimestamped("whsec_current_secret", timestamp, body);
+        const header = `t=${timestamp},v1=whk_current:${signature},source=paystack`;
+        assert.equal(verifyWebhookSignature(body, { "paystack-signature": header }), true);
+        assert.equal(verifyWebhookSignature(Buffer.from('{"event":"charge.success","amount":1}'), { "paystack-signature": header }), false);
+    });
+});
+
+test("multiple Paystack-Signature values support signing-secret rotation", () => {
+    withSignatureEnvironment({
+        PAYSTACK_WEBHOOK_SECRET: "whsec_new_secret",
+        PAYSTACK_WEBHOOK_SECRET_PREVIOUS: "whsec_old_secret",
+    }, () => {
+        const body = Buffer.from('{"event":"charge.success","data":{"id":"evt_rotation"}}');
+        const timestamp = Math.floor(Date.now() / 1000);
+        const oldSignature = signTimestamped("whsec_old_secret", timestamp, body);
+        const newSignature = signTimestamped("whsec_new_secret", timestamp, body);
+        const header = `t=${timestamp},v1=whk_old:${oldSignature},v1=whk_new:${newSignature}`;
+        assert.equal(verifyWebhookSignature(body, { "paystack-signature": header }), true);
+        const badHeader = `t=${timestamp},v1=whk_old:${"0".repeat(128)},v1=whk_new:${"0".repeat(128)}`;
+        assert.equal(verifyWebhookSignature(body, { "paystack-signature": badHeader }), false);
+    });
+});
+
+test("an invalid modern signature never falls back to the legacy header", () => {
+    withSignatureEnvironment({
+        PAYSTACK_SECRET_KEY: "test_secret_key",
+        PAYSTACK_WEBHOOK_SECRET: "whsec_current_secret",
+    }, () => {
+        const body = Buffer.from('{"event":"charge.success"}');
+        const timestamp = Math.floor(Date.now() / 1000);
+        const legacySignature = sign("test_secret_key", body);
+        const headers = {
+            "paystack-signature": `t=${timestamp},v1=whk_current:${"0".repeat(128)}`,
+            "x-paystack-signature": legacySignature,
+        };
+        assert.equal(verifyWebhookSignature(body, headers), false);
+    });
+});
+
+test("the legacy signature is verified with the secret key, not the webhook secret", () => {
+    withSignatureEnvironment({
+        PAYSTACK_SECRET_KEY: undefined,
+        PAYSTACK_WEBHOOK_SECRET: "whsec_current_secret",
+    }, () => {
+        const body = Buffer.from('{"event":"charge.success"}');
+        const signature = sign("whsec_current_secret", body);
+        assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": signature }), false);
+    });
 });
