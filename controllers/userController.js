@@ -17,7 +17,9 @@ const filterAdminUserUpdates = (body = {}) => {
     if (typeof body.email === "string") {
         updates.email = body.email.trim().toLowerCase().slice(0, 254);
     }
-    if (body.role === "admin" || body.role === "member") updates.role = body.role;
+    // Preserve the existing member-management workflow, but never let a
+    // general administrator endpoint grant administrator privileges.
+    if (body.role === "member") updates.role = "member";
     if (typeof body.isActive === "boolean") updates.isActive = body.isActive;
     return updates;
 };
@@ -106,6 +108,12 @@ const updateUser = async (req, res) => {
         if (!Object.keys(updates).length) {
             return res.status(400).json({ success: false, message: "No editable user fields were provided." });
         }
+        const existing = await User.findById(req.params.id).select("role");
+        if (!existing) return res.status(404).json({ success: false, message: "User not found." });
+        const isAdministrator = ["admin", "superAdmin", "contentAdmin", "mediaAdmin", "ministryAdmin"].includes(existing.role);
+        if (isAdministrator && (Object.hasOwn(updates, "role") || Object.hasOwn(updates, "isActive"))) {
+            return res.status(403).json({ success: false, message: "Use Super Admin administrator management to change administrator access." });
+        }
         const user = await User.findByIdAndUpdate(req.params.id, updates, {
             new: true,
             runValidators: true,
@@ -134,6 +142,10 @@ const updateUser = async (req, res) => {
 // Delete User
 const deleteUser = async (req, res) => {
     try {
+        const existing = await User.findById(req.params.id).select("role");
+        if (existing && ["admin", "superAdmin", "contentAdmin", "mediaAdmin", "ministryAdmin"].includes(existing.role)) {
+            return res.status(403).json({ success: false, message: "Use Super Admin administrator management to revoke administrator access." });
+        }
         const user = await User.findByIdAndDelete(req.params.id);
 
         if (!user) {

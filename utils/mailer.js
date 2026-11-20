@@ -76,20 +76,24 @@ const sendVerificationEmail = (user, token) => {
     });
 };
 
-const sendPasswordResetEmail = (user, token) => {
-    const url = `${(process.env.FRONTEND_URL || "https://royal-higher-life-ag25.vercel.app").replace(/\/$/, "")}/reset-password/${encodeURIComponent(token)}`;
+const sendOtpEmail = (user, code) => {
     return sendTemplatedEmail({
         to: user.email,
-        subject: `Reset your ${MINISTRY} password`,
+        subject: `Your ${MINISTRY} password reset code`,
         template: "passwordReset",
-        values: { name: user.firstName, url },
-        idempotencyKey: stableKey("password-reset", `${user.id}:${token}`),
+        values: { name: user.firstName, code },
+        idempotencyKey: stableKey("otp-reset", `${user.id}:${code}`),
     });
 };
 
 const sendPasswordChangedEmail = (user, eventId) => sendTemplatedEmail({
     to: user.email, subject: `Your ${MINISTRY} password was changed`, template: "securityNotice",
     values: { name: user.firstName }, idempotencyKey: stableKey("password-changed", `${user.id}:${eventId}`),
+});
+
+const sendAdminSuspensionNotice = (user) => sendTemplatedEmail({
+    to: user.email, subject: `Administrator access updated — ${MINISTRY}`, template: "adminSuspended",
+    values: { name: user.firstName }, idempotencyKey: stableKey("admin-suspended", `${user.id}:${user.updatedAt?.toISOString() || ""}`),
 });
 
 const sendContactConfirmation = (email, name, reference, id, submittedAt) => sendTemplatedEmail({
@@ -203,8 +207,9 @@ module.exports = {
     sendEmail,
     verifyEmailTransport: require("../Config/email").verifyEmailTransport,
     sendVerificationEmail,
-    sendPasswordResetEmail,
+    sendOtpEmail,
     sendPasswordChangedEmail,
+    sendAdminSuspensionNotice,
     sendContactConfirmation,
     sendPrayerConfirmation,
     sendAdminContactNotification,

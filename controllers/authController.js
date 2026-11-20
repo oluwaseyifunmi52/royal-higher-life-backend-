@@ -1,5 +1,6 @@
 const asyncHandler = require("../utils/asyncHandler");
 const authService = require("../services/authService");
+const crypto = require("crypto");
 
 // Register
 const register = asyncHandler(async (req, res) => {
@@ -18,7 +19,11 @@ const register = asyncHandler(async (req, res) => {
 
 // Login
 const login = asyncHandler(async (req, res) => {
-    const { token, user } = await authService.loginUser(req.body);
+    const credentials = req.body || {};
+    const adminOnly = credentials.adminOnly === true;
+    const loginRequestId = adminOnly ? crypto.randomBytes(8).toString("hex") : undefined;
+    const { token, user } = await authService.loginUser({ ...credentials, adminOnly, loginRequestId });
+    if (adminOnly) console.info("Admin login succeeded.", { requestId: loginRequestId, role: user.role });
 
     res.status(200).json({
         success: true,
@@ -50,7 +55,9 @@ const resendOTP = asyncHandler(async (req, res) => {
 
 // Forgot Password
 const forgotPassword = asyncHandler(async (req, res) => {
-    await authService.forgotPassword(req.body.email);
+    const requestId = `reset-${crypto.randomBytes(6).toString("hex")}`;
+    console.info(`[RESET:${requestId}] Password-reset request received.`);
+    await authService.forgotPassword(req.body.email, requestId);
 
     res.status(200).json({
         success: true,
@@ -76,6 +83,11 @@ const getProfile = asyncHandler(async (req, res) => {
         success: true,
         user,
     });
+});
+
+const logout = asyncHandler(async (req, res) => {
+    await authService.logoutUser(req.user._id);
+    res.status(200).json({ success: true, message: "Signed out successfully." });
 });
 
 // Update Profile
@@ -147,6 +159,7 @@ module.exports = {
     forgotPassword,
     resetPassword,
     getProfile,
+    logout,
     updateProfile,
     changePassword,
     uploadProfileImage,

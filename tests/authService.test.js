@@ -44,3 +44,9 @@ test("admin user edits cannot mass-assign credentials or internal account state"
         { firstName: "Member", email: "member@example.com", role: "member", isActive: false }
     );
 });
+
+test("member management cannot grant any administrator role", () => {
+    assert.deepEqual(filterAdminUserUpdates({ role: "superAdmin", isActive: true }), { isActive: true });
+    assert.deepEqual(filterAdminUserUpdates({ role: "contentAdmin" }), {});
+    assert.deepEqual(filterAdminUserUpdates({ role: "member" }), { role: "member" });
+});

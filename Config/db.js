@@ -1,5 +1,10 @@
+// Apply the DNS resolver override BEFORE mongoose (and the bundled MongoDB
+// driver) are loaded: mongodb+srv lookups go through Node's c-ares resolver,
+// which defaults to a dead 127.0.0.1 stub on this machine (ECONNREFUSED/querySrv).
+const { applyDnsOverride, parseDnsServers } = require("./dns");
+applyDnsOverride();
+
 const dns = require("dns");
-const net = require("net");
 const mongoose = require("mongoose");
 
 const DNS_QUERY_SYSCALLS = new Set(["querySrv", "queryTxt", "queryA", "queryAaaa"]);
@@ -39,31 +44,8 @@ function isDnsError(error) {
     return /^query(Srv|Txt|A|Aaaa)\b/.test(error?.message || "");
 }
 
-function parseDnsServers(value) {
-    if (value == null) return [];
-    const servers = String(value)
-        .split(",")
-        .map((server) => server.trim())
-        .filter(Boolean);
-    const invalid = servers.filter((server) => net.isIP(server) === 0);
-    if (invalid.length > 0) {
-        throw new Error("NODE_DNS_SERVERS must be a comma-separated list of IP addresses (for example 8.8.8.8,8.8.4.4).");
-    }
-    return servers;
-}
-
-let dnsOverrideLogged = false;
-
-function applyDnsOverride() {
-    const servers = parseDnsServers(process.env.NODE_DNS_SERVERS);
-    if (servers.length === 0) return null;
-    dns.setServers(servers);
-    if (!dnsOverrideLogged) {
-        console.info("Node DNS resolver overridden for MongoDB lookup.", { servers });
-        dnsOverrideLogged = true;
-    }
-    return servers;
-}
+// parseDnsServers and applyDnsOverride now live in ./dns so the resolver is
+// configured in exactly one place, before the MongoDB driver loads.
 
 function describeConnectionError(error) {
     const code = getErrorCode(error);
@@ -130,4 +112,4 @@ async function connectDB(options = {}) {
     }
 }
 
-module.exports = { connectDB, describeMongoUri, describeConnectionError, parseDnsServers };
+module.exports = { connectDB, describeMongoUri, describeConnectionError, parseDnsServers, applyDnsOverride };

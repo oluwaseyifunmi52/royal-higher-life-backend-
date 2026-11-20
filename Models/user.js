@@ -24,20 +24,20 @@ const userSchema = new mongoose.Schema(
         },
         password: {
             type: String,
-            required: function passwordRequired() { return this.provider === "local"; },
+            required: function passwordRequired() { return this.provider === "local" && this.isActive; },
             minlength: 8,
             select: false,
         },
 
         role: {
             type: String,
-            enum: ["admin", "member"],
+            enum: ["admin", "superAdmin", "contentAdmin", "mediaAdmin", "ministryAdmin", "member"],
             default: "member",
         },
 
        phone: {
             type: String,
-            required: function phoneRequired() { return this.provider === "local"; },
+            required: function phoneRequired() { return this.provider === "local" && this.isActive && this.role === "member"; },
             unique: true,
             sparse: true,
             trim: true,
@@ -88,6 +88,8 @@ const userSchema = new mongoose.Schema(
             default: true,
         },
 
+        tokenVersion: { type: Number, default: 0 },
+        lastLoginAt: { type: Date, default: null },
         isEmailVerified: {
             type: Boolean,
             default: false,
@@ -108,6 +110,12 @@ const userSchema = new mongoose.Schema(
         otp: {
             type: String,
             default: null,
+            select: false,
+        },
+
+        otpAttempts: {
+            type: Number,
+            default: 0,
             select: false,
         },
 

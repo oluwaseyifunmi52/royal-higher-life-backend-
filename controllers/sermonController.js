@@ -25,7 +25,7 @@ const createSermon = asyncHandler(async (req, res) => {
 });
 
 const getSermons = asyncHandler(async (req, res) => {
-    const sermons = await Sermon.find({ isPublished: { $ne: false } }).sort({ sermonDate: -1 });
+    const sermons = await Sermon.find({ isPublished: { $ne: false }, $or: [{ publishAt: null }, { publishAt: { $lte: new Date() } }] }).sort({ sermonDate: -1 });
     res.status(200).json(new ApiResponse(200, "Sermons fetched successfully", sermons));
 });
 
@@ -37,7 +37,7 @@ const getAllSermonsAdmin = asyncHandler(async (_req, res) => {
 const getSermon = asyncHandler(async (req, res) => {
     const sermon = await Sermon.findById(req.params.id);
 
-    if (!sermon || sermon.isPublished === false) {
+    if (!sermon || sermon.isPublished === false || (sermon.publishAt && sermon.publishAt > new Date())) {
         throw new ApiError(404, "Sermon not found");
     }
 

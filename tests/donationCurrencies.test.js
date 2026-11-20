@@ -207,7 +207,7 @@ test("configured NGN donation initializes through the mocked Paystack adapter", 
             paymentReference: "RHLM-mock-reference",
             status: "pending",
             donationType: "General Offering",
-            isAnonymous: false,
+            isAnonymous: true,
             note: "",
             campaign: null,
             createdAt: new Date(),
@@ -223,7 +223,7 @@ test("configured NGN donation initializes through the mocked Paystack adapter", 
         });
         try {
             const { res, error } = await invoke(createDonation, {
-                body: { name: "Test Donor", email: "test@example.com", phone: "08000000000", amount: 12500, currency: "NGN", paymentMethod: "paypal" },
+                body: { name: "Test Donor", email: "test@example.com", phone: "08000000000", amount: 12500, currency: "NGN", paymentMethod: "paypal", anonymous: true },
             });
             assert.equal(error, undefined, error && error.message);
             assert.equal(initialize.mock.callCount(), 1);
@@ -232,7 +232,9 @@ test("configured NGN donation initializes through the mocked Paystack adapter", 
             assert.equal(initializeOptions.currency, "NGN");
             assert.match(initializeOptions.reference, /^RHLM-\d+-[a-f\d]{20}$/);
             assert.equal(initializeOptions.metadata.donationId, String(fakeDonation._id));
+            assert.equal(initializeOptions.metadata.isAnonymous, true);
             assert.equal(create.mock.calls[0].arguments[0].paymentMethod, "paystack");
+            assert.equal(create.mock.calls[0].arguments[0].isAnonymous, true);
             assert.equal(res.body.data.authorizationUrl, "https://checkout.example.test/mock-session");
             assert.equal(updateOne.mock.callCount(), 0);
             assert.equal(audit.mock.callCount(), 1);

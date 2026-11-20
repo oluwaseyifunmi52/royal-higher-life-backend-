@@ -18,7 +18,7 @@ const createMinistry = asyncHandler(async (req, res) => {
 });
 
 const getMinistries = asyncHandler(async (req, res) => {
-    const ministries = await Ministry.find().sort({ createdAt: -1 });
+    const ministries = await Ministry.find({ isActive: { $ne: false } }).sort({ sortOrder: 1, createdAt: -1 });
     res.status(200).json(new ApiResponse(200, "Ministries fetched successfully", ministries));
 });
 

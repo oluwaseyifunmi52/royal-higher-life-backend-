@@ -26,7 +26,9 @@ function buildEmail(template, values = {}) {
         case "verification":
             return layout("Verify Your Royal HigherLife Account", `<p>Hello ${name},</p><p>Welcome to Royal HigherLife Christian Ministries.</p><p>Thank you for creating an account with us.</p><p>Please verify your email address by clicking the button below.</p><p style="margin:28px 0"><a href="${escapeHtml(values.url)}" style="display:inline-block;background:#f5b335;color:#0d1426;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:7px">Verify My Email</a></p><p>This link is secure and expires after the configured verification period.</p><p>If you did not create this account, you can safely ignore this email.</p>`);
         case "passwordReset":
-            return layout("Reset your password", `<p>Hello ${name},</p><p>We received a request to reset your password. Use the button below to choose a new one.</p><p style="margin:28px 0"><a href="${escapeHtml(values.url)}" style="display:inline-block;background:#f5b335;color:#0d1426;text-decoration:none;font-weight:bold;padding:13px 22px;border-radius:7px">Reset password</a></p><p>This link expires in 15 minutes. If you did not request a reset, ignore this email.</p>`);
+            return layout("Reset your password", `<p>Hello ${name},</p><p>We received a request to reset your password. Your one-time code is:</p><p style="font-size:28px;font-weight:bold;letter-spacing:6px;color:#0d1426;text-align:center">${escapeHtml(values.code)}</p><p>This code expires in 10 minutes. If you did not request a reset, ignore this email.</p>`);
+        case "adminSuspended":
+            return layout("Administrator access updated", `<p>Hello ${name},</p><p>Your Royal HigherLife administrator access was suspended. Contact a Super Admin if you believe this is an error.</p>`);
         case "securityNotice":
             return layout("Your password was changed", `<p>Hello ${name},</p><p>The password for your ${MINISTRY} account was changed. If you did not make this change, contact us immediately at <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>.</p>`);
         case "contactConfirmation":

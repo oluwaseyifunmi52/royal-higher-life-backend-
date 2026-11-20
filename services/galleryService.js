@@ -5,8 +5,10 @@ const createGallery = async (data) => {
 };
 
 const getGalleries = async () => {
-    return await Gallery.find().sort({ createdAt: -1 });
+    return await Gallery.find({ isPublished: { $ne: false } }).sort({ sortOrder: 1, createdAt: -1 });
 };
+
+const getAllGalleriesAdmin = async () => Gallery.find().sort({ sortOrder: 1, createdAt: -1 });
 
 const getGalleryById = async (id) => {
     return await Gallery.findById(id);
@@ -26,6 +28,7 @@ const deleteGallery = async (id) => {
 module.exports = {
     createGallery,
     getGalleries,
+    getAllGalleriesAdmin,
     getGalleryById,
     updateGallery,
     deleteGallery,

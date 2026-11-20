@@ -15,31 +15,13 @@ const PAYMENT_PROVIDERS = Object.freeze({
     paystack: { id: "paystack", name: "Paystack" },
 });
 
-// A real Paystack key starts with sk_test_ or sk_live_ and has a substantial
-// key body. Presence of the variable alone is never proof of merchant eligibility.
-const PAYSTACK_SECRET_KEY_PATTERN = /^sk_(test|live)_[A-Za-z0-9]{16,}$/;
-const PAYSTACK_PLACEHOLDER_PATTERN = /(placeholder|replace[-_]?me|your[-_]?(secret|api)[-_]?key|example|dummy|fake|changeme|xxxx|000000|111111)/i;
-
-const normalizedPaystackCountry = () => String(process.env.PAYSTACK_ACCOUNT_COUNTRY || "").trim().toUpperCase();
-
-const paystackEnvironment = () => {
-    const nodeEnvironment = String(process.env.NODE_ENV || "development").trim().toLowerCase();
-    return ["production", "prod", "live"].includes(nodeEnvironment) ? "live" : "test";
-};
-
 /**
  * Returns true only when the configured key looks genuine, is for the right
  * account country, and matches the environment this backend is running in.
  * Account eligibility still has to be confirmed in the Paystack dashboard.
  */
 const hasConfiguredNgnPaymentProvider = () => {
-    const secretKey = process.env.PAYSTACK_SECRET_KEY;
-    if (typeof secretKey !== "string" || secretKey !== secretKey.trim()) return false;
-    if (!PAYSTACK_SECRET_KEY_PATTERN.test(secretKey)) return false;
-    if (PAYSTACK_PLACEHOLDER_PATTERN.test(secretKey)) return false;
-    if (/^(.)\1+$/.test(secretKey.slice(secretKey.indexOf("_", 3) + 1))) return false;
-    if (normalizedPaystackCountry() !== "NG") return false;
-    return secretKey.startsWith("sk_test_") ? paystackEnvironment() === "test" : paystackEnvironment() === "live";
+    return paymentService.hasEligiblePaystackConfiguration();
 };
 
 const getConfiguredDonationProviderIds = () => hasConfiguredNgnPaymentProvider() ? ["paystack"] : [];
@@ -109,7 +91,11 @@ const createDonation = asyncHandler(async (req, res) => {
             currency: normalizedCurrency,
             reference,
             callback_url: `${FRONTEND_URL()}/donations/complete`,
-            metadata: { donationId: String(donation._id), donationReference: reference },
+            metadata: {
+                donationId: String(donation._id),
+                donationReference: reference,
+                isAnonymous: donation.isAnonymous,
+            },
         });
         if (!payment.status || !payment.data?.authorization_url) throw new Error("Payment provider did not return a checkout URL");
         await DonationAudit.create({ donation: donation._id, action: "payment.initialized", metadata: { provider: "paystack" } }).catch((error) => {

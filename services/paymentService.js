@@ -10,10 +10,22 @@ const client = axios.create({
 const WEBHOOK_TOLERANCE_SECONDS = 300;
 const SIGNATURE_HEX_PATTERN = /^[a-f\d]{128}$/i;
 const PAYSTACK_SECRET_KEY_PATTERN = /^sk_(test|live)_[A-Za-z0-9]{16,}$/;
+const PAYSTACK_PLACEHOLDER_PATTERN = /(placeholder|replace[-_]?me|your[-_]?(secret|api)[-_]?key|example|dummy|fake|changeme|xxxx|000000|111111)/i;
+
+function hasEligiblePaystackConfiguration() {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (typeof secret !== "string" || secret !== secret.trim()) return false;
+    if (!PAYSTACK_SECRET_KEY_PATTERN.test(secret) || PAYSTACK_PLACEHOLDER_PATTERN.test(secret)) return false;
+    if (/^(.)\1+$/.test(secret.slice(secret.indexOf("_", 3) + 1))) return false;
+    if (String(process.env.PAYSTACK_ACCOUNT_COUNTRY || "").trim().toUpperCase() !== "NG") return false;
+    const environment = String(process.env.NODE_ENV || "development").trim().toLowerCase();
+    const isProduction = ["production", "prod", "live"].includes(environment);
+    return secret.startsWith("sk_test_") ? !isProduction : isProduction;
+}
 
 function getSecret() {
     const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (typeof secret !== "string" || !PAYSTACK_SECRET_KEY_PATTERN.test(secret.trim())) {
+    if (!hasEligiblePaystackConfiguration()) {
         throw Object.assign(new Error("Payment service is not configured"), { code: "PAYMENT_NOT_CONFIGURED" });
     }
     return secret.trim();
@@ -114,4 +126,5 @@ module.exports = {
     initializePayment,
     verifyPayment,
     verifyWebhookSignature,
+    hasEligiblePaystackConfiguration,
 };

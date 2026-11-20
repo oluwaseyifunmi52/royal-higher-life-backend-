@@ -32,6 +32,10 @@ const eventSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        isPublished: { type: Boolean, default: true },
+        publishAt: { type: Date, default: null },
+        registrationUrl: { type: String, trim: true, default: "" },
+        registrationDeadline: { type: Date, default: null },
     },
     { timestamps: true }
 );

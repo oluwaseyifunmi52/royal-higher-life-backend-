@@ -13,6 +13,7 @@ const generateToken = (user) => {
             id: user._id,
             email: user.email,
             role: user.role,
+            tokenVersion: user.tokenVersion || 0,
         },
         JWT_SECRET,
         {
@@ -25,9 +26,9 @@ const verifyToken = (token) => {
     return jwt.verify(token, JWT_SECRET);
 };
 
-const signToken = (payload) => {
+const signToken = (payload, expiresIn = JWT_EXPIRES_IN) => {
     return jwt.sign(payload, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN,
+        expiresIn,
     });
 };
 

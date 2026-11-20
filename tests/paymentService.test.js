@@ -1,7 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
-const { verifyWebhookSignature } = require("../services/paymentService");
+const { verifyWebhookSignature, hasEligiblePaystackConfiguration, initializePayment } = require("../services/paymentService");
 
 function withSignatureEnvironment(settings = {}, callback) {
     const names = ["PAYSTACK_SECRET_KEY", "PAYSTACK_WEBHOOK_SECRET", "PAYSTACK_WEBHOOK_SECRET_PREVIOUS"];
@@ -98,4 +98,29 @@ test("the legacy signature is verified with the secret key, not the webhook secr
         const signature = sign("whsec_current_secret", body);
         assert.equal(verifyWebhookSignature(body, { "x-paystack-signature": signature }), false);
     });
+});
+
+test("Paystack API calls require matching account country and environment eligibility", async () => {
+    const names = ["PAYSTACK_SECRET_KEY", "PAYSTACK_ACCOUNT_COUNTRY", "NODE_ENV"];
+    const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    const restore = () => names.forEach((name) => previous[name] === undefined ? delete process.env[name] : process.env[name] = previous[name]);
+    try {
+        process.env.PAYSTACK_SECRET_KEY = "sk_test_0123456789abcdef";
+        process.env.PAYSTACK_ACCOUNT_COUNTRY = "NG";
+        process.env.NODE_ENV = "development";
+        assert.equal(hasEligiblePaystackConfiguration(), true);
+        process.env.PAYSTACK_SECRET_KEY = "sk_test_replace_with_your_real_test_key";
+        assert.equal(hasEligiblePaystackConfiguration(), false);
+        process.env.PAYSTACK_SECRET_KEY = "sk_test_0123456789abcdef";
+        process.env.PAYSTACK_ACCOUNT_COUNTRY = "GH";
+        assert.equal(hasEligiblePaystackConfiguration(), false);
+        process.env.PAYSTACK_ACCOUNT_COUNTRY = "NG";
+        process.env.NODE_ENV = "production";
+        assert.equal(hasEligiblePaystackConfiguration(), false);
+        await assert.rejects(initializePayment({}), { code: "PAYMENT_NOT_CONFIGURED" });
+        process.env.PAYSTACK_SECRET_KEY = "sk_live_0123456789abcdef";
+        assert.equal(hasEligiblePaystackConfiguration(), true);
+    } finally {
+        restore();
+    }
 });

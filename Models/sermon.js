@@ -53,6 +53,8 @@ const sermonSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        publishAt: { type: Date, default: null },
+        isFeatured: { type: Boolean, default: false },
     },
     {
         timestamps: true,

@@ -30,6 +30,8 @@ const announcementSchema = new mongoose.Schema(
             type: Boolean,
             default: true,
         },
+        publishAt: { type: Date, default: null },
+        imageUrl: { type: String, trim: true, default: "" },
         sentBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",

@@ -4,13 +4,16 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "test": "node --test",
-  "start": "node index.js",
-  "dev": "nodemon index.js",
-  "email:test": "node scripts/send-email-check.js",
-  "db:migrate-social-auth": "node scripts/migrate-social-auth-indexes.js",
-  "dev:all": "concurrently \"npm run dev\" \"npm --prefix client run dev\""
-},
+    "test": "node --test tests/*.test.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "email:test": "node scripts/send-email-check.js",
+    "db:migrate-social-auth": "node scripts/migrate-social-auth-indexes.js",
+    "dev:all": "concurrently \"npm run dev\" \"npm --prefix client run dev\"",
+    "admin:create-initial": "node scripts/create-initial-super-admin.js",
+    "admin:bootstrap": "node scripts/create-initial-super-admin.js",
+    "admin:password-reset": "node scripts/admin-password-reset.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",

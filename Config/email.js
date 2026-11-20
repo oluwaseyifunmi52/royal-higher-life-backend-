@@ -55,8 +55,8 @@ function getSmtpTransporter() {
         smtpTransporter = nodemailer.createTransport({
             host: config.host,
             port: config.port,
-            secure: false,
-            requireTLS: true,
+            secure: config.port === 465,
+            requireTLS: config.port !== 465,
             auth: { user: config.user, pass: config.pass },
             tls: { rejectUnauthorized: true, servername: config.host },
         });

@@ -28,6 +28,10 @@ const auth = async (req, res, next) => {
             });
         }
 
+        if (!user.isActive || Number(decoded.tokenVersion || 0) !== Number(user.tokenVersion || 0)) {
+            return res.status(401).json({ success: false, message: "Session expired or account is unavailable. Please sign in again." });
+        }
+
         req.user = user;
 
         next();

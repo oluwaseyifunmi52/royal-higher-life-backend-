@@ -8,9 +8,13 @@ const {
     getAllAnnouncements,
     getAnnouncementById,
     deleteAnnouncement,
+    getAllAnnouncementsAdmin,
+    updateAnnouncement,
 } = require("../controllers/announcementController");
 
 router.post("/", auth, authorize("admin"), createAnnouncement);
+router.get("/admin/all", auth, authorize("admin"), getAllAnnouncementsAdmin);
+router.put("/:id", auth, authorize("admin"), validateObjectId(), updateAnnouncement);
 router.get("/", getAllAnnouncements);
 router.get("/:id", validateObjectId(), getAnnouncementById);
 router.delete("/:id", auth, authorize("admin"), validateObjectId(), deleteAnnouncement);
