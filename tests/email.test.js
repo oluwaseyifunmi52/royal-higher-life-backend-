@@ -56,7 +56,8 @@ test("Resend acceptance carries a provider id without claiming delivery", async 
     });
     assert.deepEqual(result, { sent: true, accepted: true, id: "email_test_123", provider: "resend", deliveryStatus: "unknown" });
     assert.equal(call[0].replyTo, "visitor@example.com");
-    assert.deepEqual(call[1], { idempotencyKey: "contact-test-key" });
+    assert.equal(call[1].idempotencyKey, "contact-test-key");
+    assert.equal(call[1].signal?.aborted, false);
 });
 
 test("Resend provider errors return an undelivered result", async () => {

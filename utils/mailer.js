@@ -36,7 +36,10 @@ async function sendEmail({ to, subject, html, text, idempotencyKey, replyTo }) {
         if (config.provider === "resend") {
             const client = getResendClient();
             if (!client) return { sent: false, reason: "not_configured", provider: config.provider };
-            const { data, error } = await client.emails.send(message, idempotencyKey ? { idempotencyKey } : undefined);
+            const { data, error } = await client.emails.send(message, {
+                ...(idempotencyKey ? { idempotencyKey } : {}),
+                signal: AbortSignal.timeout(20_000),
+            });
             if (error) {
                 const providerStatus = Number.isInteger(error.statusCode) ? error.statusCode : null;
                 const providerCode = typeof error.name === "string"

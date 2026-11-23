@@ -2,15 +2,11 @@ const PrayerRequest = require("../Models/prayerRequest");
 const asyncHandler = require("../utils/asyncHandler");
 const ApiError = require("../utils/apiError");
 const ApiResponse = require("../utils/apiResponse");
-const { sendPrayerConfirmation, sendAdminPrayerNotification } = require("../utils/mailer");
+const { submissionIdFromKey, SUBMISSION_KEY_PATTERN } = require("../utils/submissionIdempotency");
+const { enqueueSubmissionNotifications, enqueueNotification, resetFailedJob, attachAdminNotificationStatuses } = require("../services/notificationOutbox");
 
 const EMAIL_PATTERN = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
 const CATEGORIES = ["Healing", "Financial Breakthrough", "Family", "Spiritual Growth", "General Prayer"];
-const summarizeDelivery = (results) => {
-    const sent = results.filter((result) => result.status === "fulfilled" && result.value?.sent).length;
-    return sent === results.length ? "sent" : sent ? "partial" : "failed";
-};
-
 const createPrayerRequest = asyncHandler(async (req, res) => {
     const {
         firstname,
@@ -27,6 +23,7 @@ const createPrayerRequest = asyncHandler(async (req, res) => {
     const requestText = String(request || prayer || "").trim();
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedCategory = String(category || "General Prayer").trim();
+    const submissionKey = String(req.body.submissionKey || req.get?.("Idempotency-Key") || "").trim();
 
     if (!fullName || !normalizedEmail || !requestText) {
         throw new ApiError(400, "Name, email, and prayer request are required");
@@ -36,78 +33,62 @@ const createPrayerRequest = asyncHandler(async (req, res) => {
     }
     if (!EMAIL_PATTERN.test(normalizedEmail)) throw new ApiError(400, "A valid email address is required");
     if (!CATEGORIES.includes(normalizedCategory)) throw new ApiError(400, "Select a valid prayer category");
+    if (!SUBMISSION_KEY_PATTERN.test(submissionKey)) throw new ApiError(400, "A valid submission key is required. Please refresh the form and try again.");
 
-    const prayerRequest = await PrayerRequest.create({
-        name: fullName,
-        email: normalizedEmail,
-        phone: String(phone || "").trim().slice(0, 40),
-        request: requestText,
-        category: normalizedCategory,
-        isPrivate: true,
-        status: "pending",
-    });
-
-    const results = await Promise.allSettled([
-        sendAdminPrayerNotification({
-            id: prayerRequest.id,
-            reference: prayerRequest.reference,
-            name: prayerRequest.name,
-            category: prayerRequest.category,
-            createdAt: prayerRequest.createdAt,
-        }),
-        sendPrayerConfirmation(prayerRequest.email, fullName, prayerRequest.reference, prayerRequest.id, prayerRequest.createdAt.toISOString()),
-    ]);
-    const adminNotification = results[0].status === "fulfilled" ? results[0].value : null;
-    const confirmation = results[1].status === "fulfilled" ? results[1].value : null;
-    prayerRequest.notificationStatus = summarizeDelivery(results);
-    prayerRequest.notificationFailure = prayerRequest.notificationStatus === "sent" ? "" : results
-        .map((result) => result.status === "fulfilled" ? result.value?.reason : "provider_error")
-        .filter(Boolean).join(",").slice(0, 200);
-    prayerRequest.notificationProviderId = adminNotification?.accepted ? adminNotification.id || "" : "";
-    prayerRequest.confirmationStatus = confirmation?.accepted ? "accepted" : confirmation?.reason === "network_error" || results[1].status === "rejected" ? "unknown" : "failed";
-    prayerRequest.notificationAttemptCount = 1;
-    prayerRequest.lastNotificationAttemptAt = new Date();
-    await prayerRequest.save();
-    if (prayerRequest.notificationStatus !== "sent") {
-        console.warn("Prayer notification delivery was incomplete.", { reference: prayerRequest.reference, status: prayerRequest.notificationStatus });
+    const deterministicId = submissionIdFromKey(submissionKey);
+    let prayerRequest = await PrayerRequest.findById(deterministicId);
+    let isDuplicate = Boolean(prayerRequest);
+    if (!prayerRequest) {
+        try {
+            prayerRequest = await PrayerRequest.create({
+                _id: deterministicId,
+                name: fullName,
+                email: normalizedEmail,
+                phone: String(phone || "").trim().slice(0, 40),
+                request: requestText,
+                category: normalizedCategory,
+                isPrivate: true,
+                status: "pending",
+            });
+        } catch (error) {
+            if (error?.code !== 11000) throw error;
+            prayerRequest = await PrayerRequest.findById(deterministicId);
+            if (!prayerRequest) throw error;
+            isDuplicate = true;
+        }
     }
 
-    return res.status(201).json({
-        ...new ApiResponse(201, "Your confidential prayer request was received.", {
+    await enqueueSubmissionNotifications("prayer", prayerRequest._id);
+
+    const statusCode = isDuplicate ? 200 : 201;
+    return res.status(statusCode).json({
+        ...new ApiResponse(statusCode, "Your confidential prayer request was received and queued for notification.", {
             reference: prayerRequest.reference,
             status: prayerRequest.status,
-            notificationStatus: prayerRequest.notificationStatus,
+            notificationStatus: prayerRequest.notificationStatus || "pending",
         }),
-        emailNotificationsSent: prayerRequest.notificationStatus === "sent",
+        emailNotificationsSent: false,
+        emailNotificationQueued: true,
     });
 });
 
 const retryPrayerNotification = asyncHandler(async (req, res) => {
-    const prayerRequest = await PrayerRequest.findOneAndUpdate(
-        { _id: req.params.id, notificationStatus: { $ne: "pending" } },
-        { $set: { notificationStatus: "pending", notificationFailure: "" }, $inc: { notificationAttemptCount: 1 } },
-        { new: true }
-    );
+    const prayerRequest = await PrayerRequest.findById(req.params.id);
     if (!prayerRequest) {
-        const exists = await PrayerRequest.exists({ _id: req.params.id });
-        if (!exists) throw new ApiError(404, "Prayer request not found");
-        throw new ApiError(409, "A notification attempt is already in progress");
+        throw new ApiError(404, "Prayer request not found");
     }
-    const result = await sendAdminPrayerNotification({
-        id: prayerRequest.id, reference: prayerRequest.reference, name: prayerRequest.name,
-        category: prayerRequest.category, createdAt: prayerRequest.createdAt,
-    });
-    prayerRequest.notificationStatus = result?.accepted ? "accepted" : result?.reason === "network_error" ? "unknown" : "failed";
-    prayerRequest.notificationProviderId = result?.accepted ? result.id || "" : "";
-    prayerRequest.notificationFailure = result?.accepted ? "" : result?.providerCode || result?.reason || "provider_error";
-    prayerRequest.lastNotificationAttemptAt = new Date();
+    const jobId = await enqueueNotification("prayer-admin", prayerRequest._id);
+    const reset = await resetFailedJob("prayer-admin", prayerRequest._id);
+    if (!reset) {
+        const job = await require("../Models/notificationJob").findById(jobId).lean();
+        if (job?.status === "sent") throw new ApiError(409, "The notification was already accepted by the provider");
+        if (job?.status === "processing") throw new ApiError(409, "A notification attempt is already in progress");
+    }
+    prayerRequest.notificationStatus = "pending";
+    prayerRequest.notificationFailure = "";
     await prayerRequest.save();
-    return res.status(200).json(new ApiResponse(200, result?.accepted
-        ? "The provider accepted the confidential request notification; delivery is not confirmed."
-        : "The prayer request remains saved, but its notification could not be accepted.", {
-        reference: prayerRequest.reference, notificationStatus: prayerRequest.notificationStatus,
-        notificationProviderId: prayerRequest.notificationProviderId || null,
-        notificationFailure: prayerRequest.notificationFailure,
+    return res.status(202).json(new ApiResponse(202, "The confidential request notification was queued for retry.", {
+        reference: prayerRequest.reference, notificationStatus: "pending", notificationJobId: jobId,
     }));
 });
 
@@ -116,7 +97,8 @@ const getAllPrayerRequests = asyncHandler(async (req, res) => {
     if (req.query.category && CATEGORIES.includes(req.query.category)) filter.category = req.query.category;
     if (["pending", "received", "praying", "completed"].includes(req.query.status)) filter.status = req.query.status;
     const prayerRequests = await PrayerRequest.find(filter).sort({ createdAt: -1 });
-    return res.status(200).json(new ApiResponse(200, "Prayer requests fetched successfully", prayerRequests));
+    const visibleRequests = await attachAdminNotificationStatuses("prayer", prayerRequests);
+    return res.status(200).json(new ApiResponse(200, "Prayer requests fetched successfully", visibleRequests));
 });
 
 const getPrayerRequestById = asyncHandler(async (req, res) => {
@@ -126,7 +108,8 @@ const getPrayerRequestById = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Prayer request not found");
     }
 
-    return res.status(200).json(new ApiResponse(200, "Prayer request fetched successfully", prayerRequest));
+    const [visibleRequest] = await attachAdminNotificationStatuses("prayer", [prayerRequest]);
+    return res.status(200).json(new ApiResponse(200, "Prayer request fetched successfully", visibleRequest));
 });
 
 const updatePrayerRequest = asyncHandler(async (req, res) => {

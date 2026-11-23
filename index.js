@@ -18,6 +18,7 @@ const { corsMiddleware } = require("./Config/cors");
 const { cloudinary } = require("./Config/cloudinary");
 const { authLimiter, publicSubmissionLimiter, webhookLimiter, passwordResetLimiter, uploadLimiter } = require("./Middleware/rateLimiter");
 const { verifyEmailTransport } = require("./Config/email");
+const { startNotificationWorker } = require("./services/notificationOutbox");
 
 // Routes
 const authRoutes = require("./routes/authRoute");
@@ -155,22 +156,23 @@ app.use(errorHandler);
 const startServer = async () => {
     try {
         await connectDB();
+        startNotificationWorker();
 
-        // Verify SMTP transporter at startup. A failed check logs a diagnostic
-        // but does not prevent the Express application from starting.
+        // Verify the configured email transport at startup. A failed check logs
+        // a diagnostic but does not prevent the application from starting.
         try {
             const smtpCheck = await verifyEmailTransport();
             if (smtpCheck.verified) {
-                console.info("SMTP ready.");
+                console.info(`${smtpCheck.provider} ready.`);
             } else {
-                console.error("SMTP ERROR:", smtpCheck.reason || "SMTP verification failed.", {
+                console.error("Email provider check:", smtpCheck.reason || "Email provider verification failed.", {
                     provider: smtpCheck.provider,
                     ...(smtpCheck.providerCode ? { providerCode: smtpCheck.providerCode } : {}),
                     ...(smtpCheck.providerStatus ? { providerStatus: smtpCheck.providerStatus } : {}),
                 });
             }
         } catch (smtpError) {
-            console.error("SMTP ERROR:", smtpError?.message || smtpError?.name || "SMTP verification threw an unexpected error.");
+            console.error("Email provider check failed:", smtpError?.message || smtpError?.name || "Provider verification threw an unexpected error.");
         }
 
         app.listen(PORT, () => {

@@ -57,6 +57,9 @@ function getSmtpTransporter() {
             port: config.port,
             secure: config.port === 465,
             requireTLS: config.port !== 465,
+            connectionTimeout: 15_000,
+            greetingTimeout: 15_000,
+            socketTimeout: 20_000,
             auth: { user: config.user, pass: config.pass },
             tls: { rejectUnauthorized: true, servername: config.host },
         });
