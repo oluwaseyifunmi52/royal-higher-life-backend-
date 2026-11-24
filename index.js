@@ -16,7 +16,7 @@ const cookieParser = require("cookie-parser");
 const { connectDB } = require("./Config/db");
 const { corsMiddleware } = require("./Config/cors");
 const { cloudinary } = require("./Config/cloudinary");
-const { authLimiter, publicSubmissionLimiter, webhookLimiter, passwordResetLimiter, uploadLimiter } = require("./Middleware/rateLimiter");
+const { uploadLimiter } = require("./Middleware/rateLimiter");
 const { verifyEmailTransport } = require("./Config/email");
 const { startNotificationWorker } = require("./services/notificationOutbox");
 
@@ -100,31 +100,6 @@ app.get("/", (req, res) => {
     res.status(200).json({ message: "Royal HigherLife API is running" });
 });
 
-// Apply rate limiting to specific routes
-app.use("/api/auth/register", authLimiter);
-app.use("/api/auth/login", authLimiter);
-// Backward-compatible auth aliases must share the same brute-force limits.
-app.use("/api/users/register", authLimiter);
-app.use("/api/users/login", authLimiter);
-app.use("/api/auth/verify-email", authLimiter);
-app.use("/api/auth/resend-otp", authLimiter);
-app.use("/api/auth/forgot-password", passwordResetLimiter);
-app.use("/api/auth/reset-password", passwordResetLimiter);
-app.use("/api/auth/admin-login", authLimiter);
-
-app.use("/api/reviews", publicSubmissionLimiter);
-app.use("/api/contacts", publicSubmissionLimiter);
-app.use("/api/prayers", publicSubmissionLimiter);
-// Signed Paystack webhooks must not consume the low public submission quota.
-app.use("/api/donations/webhook/paystack", webhookLimiter);
-app.use("/api/donations", (req, res, next) => {
-    if (req.path.replace(/\/$/, "") === "/webhook/paystack") return next();
-    return publicSubmissionLimiter(req, res, next);
-});
-app.use("/api/event-registrations", publicSubmissionLimiter);
-app.use("/api/volunteers", publicSubmissionLimiter);
-app.use("/api/partnerships", publicSubmissionLimiter);
-app.use("/api/newsletter", publicSubmissionLimiter);
 app.post("/api/gallery", uploadLimiter);
 app.put("/api/gallery/:id", uploadLimiter);
 app.put("/api/auth/profile-image", uploadLimiter);

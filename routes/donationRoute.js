@@ -20,15 +20,20 @@ const {
     deleteDonation,
 } = require("../controllers/donationController");
 const { listCampaigns, listCampaignsAdmin, createCampaign, updateCampaign, deactivateCampaign } = require("../controllers/campaignController");
+const { createPublicSubmissionLimiter, webhookLimiter } = require("../Middleware/rateLimiter");
+const donationLimiter = createPublicSubmissionLimiter();
+const verificationLimiter = createPublicSubmissionLimiter();
+const trackingRequestLimiter = createPublicSubmissionLimiter();
+const trackingConfirmationLimiter = createPublicSubmissionLimiter();
 
-router.post("/webhook/paystack", paystackWebhook);
+router.post("/webhook/paystack", webhookLimiter, paystackWebhook);
 router.get("/campaigns", listCampaigns);
 router.get("/currencies", getDonationCurrencies);
 router.get("/campaigns/manage", auth, authorize("admin"), listCampaignsAdmin);
-router.post("/verify", verifyDonation);
-router.post("/track/request", requestDonationTracking);
-router.post("/track/confirm", confirmDonationTracking);
-router.post("/", optionalAuth, createDonation);
+router.post("/verify", verificationLimiter, verifyDonation);
+router.post("/track/request", trackingRequestLimiter, requestDonationTracking);
+router.post("/track/confirm", trackingConfirmationLimiter, confirmDonationTracking);
+router.post("/", donationLimiter, optionalAuth, createDonation);
 router.get("/mine", auth, getMyDonations);
 router.get("/audit", auth, authorize("admin"), getDonationAudit);
 router.post("/:id/retry-receipt", auth, authorize("admin"), validateObjectId(), retryDonationReceipt);

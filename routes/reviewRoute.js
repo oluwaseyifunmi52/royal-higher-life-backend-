@@ -2,7 +2,9 @@ const express = require("express");
 const auth = require("../Middleware/auth");
 const authorize = require("../Middleware/authorize");
 const { validateObjectId } = require("../Middleware/validateObjectId");
+const { createPublicSubmissionLimiter } = require("../Middleware/rateLimiter");
 const router = express.Router();
+const submissionLimiter = createPublicSubmissionLimiter();
 const {
     createReview,
     retryTestimonyNotification,
@@ -14,7 +16,7 @@ const {
 } = require("../controllers/reviewController");
 
 // Public: Submit testimonial
-router.post("/", createReview);
+router.post("/", submissionLimiter, createReview);
 
 // Public: Get approved testimonials only
 router.get("/", getAllReviews);

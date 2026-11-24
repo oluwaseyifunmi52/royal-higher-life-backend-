@@ -2,7 +2,9 @@ const express = require("express");
 const auth = require("../Middleware/auth");
 const authorize = require("../Middleware/authorize");
 const { validateObjectId } = require("../Middleware/validateObjectId");
+const { createPublicSubmissionLimiter } = require("../Middleware/rateLimiter");
 const router = express.Router();
+const submissionLimiter = createPublicSubmissionLimiter();
 const {
     createPrayerRequest,
     retryPrayerNotification,
@@ -13,7 +15,7 @@ const {
 } = require("../controllers/prayerController");
 
 // Public: Submit prayer request
-router.post("/", createPrayerRequest);
+router.post("/", submissionLimiter, createPrayerRequest);
 
 // Admin only: List, view, update, delete prayer requests
 router.get("/", auth, authorize("admin"), getAllPrayerRequests);

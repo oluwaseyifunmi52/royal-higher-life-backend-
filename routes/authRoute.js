@@ -1,6 +1,14 @@
 const express = require("express");
 const auth = require("../Middleware/auth");
 const { createUploadMiddleware } = require("../Middleware/upload");
+const {
+    registrationLimiter,
+    loginLimiter,
+    verificationLimiter,
+    resendOtpLimiter,
+    passwordResetRequestLimiter,
+    passwordResetSubmitLimiter,
+} = require("../Middleware/rateLimiter");
 
 const {
     register,
@@ -18,16 +26,15 @@ const {
 
 const router = express.Router();
 const profileUpload = createUploadMiddleware("profile-images");
-const { passwordResetLimiter } = require("../Middleware/rateLimiter");
 
 // Public Routes
-router.post("/register", register);
-router.post("/login", login);
-router.post("/admin-login", (req, _res, next) => { req.body.adminOnly = true; next(); }, login);
-router.post("/verify-email", verifyEmail);
-router.post("/resend-otp", resendOTP);
-router.post("/forgot-password", passwordResetLimiter, forgotPassword);
-router.post("/reset-password", passwordResetLimiter, resetPassword);
+router.post("/register", registrationLimiter, register);
+router.post("/login", loginLimiter, login);
+router.post("/admin-login", loginLimiter, (req, _res, next) => { req.body.adminOnly = true; next(); }, login);
+router.post("/verify-email", verificationLimiter, verifyEmail);
+router.post("/resend-otp", resendOtpLimiter, resendOTP);
+router.post("/forgot-password", passwordResetRequestLimiter, forgotPassword);
+router.post("/reset-password", passwordResetSubmitLimiter, resetPassword);
 
 // Protected Routes
 router.get("/profile", auth, getProfile);

@@ -3,7 +3,20 @@ const assert = require("node:assert/strict");
 const express = require("express");
 const { once } = require("node:events");
 const { ipKeyGenerator } = require("express-rate-limit");
-const { authLimiter, publicSubmissionLimiter, webhookLimiter, passwordResetLimiter, createRateLimiter } = require("../Middleware/rateLimiter");
+const {
+    authLimiter,
+    publicSubmissionLimiter,
+    webhookLimiter,
+    passwordResetLimiter,
+    createRateLimiter,
+    createPublicSubmissionLimiter,
+    registrationLimiter,
+    loginLimiter,
+    verificationLimiter,
+    resendOtpLimiter,
+    passwordResetRequestLimiter,
+    passwordResetSubmitLimiter,
+} = require("../Middleware/rateLimiter");
 const { connectDB, describeMongoUri, describeConnectionError, parseDnsServers } = require("../Config/db");
 
 test("the rate limiters initialize and IPv6 addresses use subnet keys", () => {
@@ -31,6 +44,51 @@ test("custom rate limiter processes an IPv6 client request", async () => {
         server.close();
         await once(server, "close");
     }
+});
+
+test("public form limiters use independent counters and leave read/admin routes outside the quota", async () => {
+    const app = express();
+    app.set("trust proxy", "loopback");
+    const contactsLimiter = createPublicSubmissionLimiter({ max: 2 });
+    const donationsLimiter = createPublicSubmissionLimiter({ max: 2 });
+    app.post("/api/contacts", contactsLimiter, (_req, res) => res.sendStatus(201));
+    app.post("/api/donations", donationsLimiter, (_req, res) => res.sendStatus(201));
+    app.get("/api/contacts", (_req, res) => res.sendStatus(200));
+    app.post("/api/contacts/:id/retry-notification", (_req, res) => res.sendStatus(200));
+
+    const server = app.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    try {
+        const baseUrl = `http://127.0.0.1:${server.address().port}`;
+        const send = (path, method = "POST") => fetch(`${baseUrl}${path}`, {
+            method,
+            headers: { "X-Forwarded-For": "192.0.2.20" },
+        });
+
+        assert.equal((await send("/api/contacts")).status, 201);
+        assert.equal((await send("/api/contacts")).status, 201);
+        assert.equal((await send("/api/donations")).status, 201);
+        assert.equal((await send("/api/donations")).status, 201);
+        assert.equal((await send("/api/contacts")).status, 429);
+        assert.equal((await send("/api/donations")).status, 429);
+        assert.equal((await send("/api/contacts", "GET")).status, 200);
+        assert.equal((await send("/api/contacts/record/retry-notification")).status, 200);
+    } finally {
+        server.close();
+        await once(server, "close");
+    }
+});
+
+test("authentication flow limits are independent while backward-compatible aliases share them", () => {
+    assert.equal(typeof registrationLimiter, "function");
+    assert.equal(typeof loginLimiter, "function");
+    assert.equal(typeof verificationLimiter, "function");
+    assert.equal(typeof resendOtpLimiter, "function");
+    assert.equal(typeof passwordResetRequestLimiter, "function");
+    assert.equal(typeof passwordResetSubmitLimiter, "function");
+    assert.notEqual(registrationLimiter, loginLimiter);
+    assert.notEqual(verificationLimiter, resendOtpLimiter);
+    assert.notEqual(passwordResetRequestLimiter, passwordResetSubmitLimiter);
 });
 
 test("database target reporting distinguishes Atlas SRV and explicit local URIs", () => {
