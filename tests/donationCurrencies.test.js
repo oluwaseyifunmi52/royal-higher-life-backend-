@@ -14,7 +14,7 @@ const paymentService = require("../services/paymentService");
 const Donation = require("../Models/donation");
 const DonationAudit = require("../Models/donationAudit");
 const donationRoutes = require("../routes/donationRoute");
-const { corsOptions } = require("../Config/cors");
+const { corsMiddleware, corsOptions } = require("../Config/cors");
 
 const VALID_TEST_KEY = "sk_test_0123456789abcdef";
 
@@ -86,12 +86,17 @@ test("public donation currencies always include all nine definitions without pay
 
 test("the registered currency route is public and current CORS config accepts the production origin", async (t) => {
     const app = express();
+    app.use(corsMiddleware);
     app.use("/api/donations", donationRoutes);
     const server = app.listen(0, "127.0.0.1");
     t.after(() => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve())));
     await new Promise((resolve) => server.once("listening", resolve));
-    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/donations/currencies`);
+    const deploymentOrigin = "https://royal-higher-life-9ttr-git-main-oluwaseyifunmi52-projects.vercel.app";
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/donations/currencies`, {
+        headers: { Origin: deploymentOrigin },
+    });
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("access-control-allow-origin"), deploymentOrigin);
     assert.equal((await response.json()).data.currencies.length, 9);
     await new Promise((resolve, reject) => {
         corsOptions.origin("https://royal-higher-life-ag25.vercel.app", (error, allowed) => {

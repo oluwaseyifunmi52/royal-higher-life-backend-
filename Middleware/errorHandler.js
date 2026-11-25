@@ -1,6 +1,13 @@
 const errorHandler = (err, req, res, next) => {
     console.error("Error:", err.message || err);
 
+    if (err.code === "CORS_ORIGIN_DENIED") {
+        return res.status(403).json({
+            success: false,
+            message: "Origin is not allowed",
+        });
+    }
+
     // Multer file size error
     if (err.code === "LIMIT_FILE_SIZE") {
         return res.status(400).json({

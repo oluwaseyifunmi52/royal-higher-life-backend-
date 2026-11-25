@@ -16,6 +16,7 @@ const PRODUCTION_ORIGINS = [
     "https://royal-higher-life-ag25.vercel.app",
     "https://royal-higher-life-9ttr.vercel.app",
     "https://royal-higher-life-v9tt.vercel.app",
+    "https://royal-higher-life-9ttr-git-main-oluwaseyifunmi52-projects.vercel.app",
 ];
 
 const configuredOrigins = process.env.CORS_ORIGIN
@@ -29,7 +30,10 @@ const corsOptions = {
         if (!origin || allowedOrigins.includes(origin)) {
             callback(null, true);
         } else {
-            callback(new Error("Not allowed by CORS"));
+            const error = new Error("Not allowed by CORS");
+            error.code = "CORS_ORIGIN_DENIED";
+            error.statusCode = 403;
+            callback(error);
         }
     },
     // The client authenticates with bearer headers; this API does not use cookies.
