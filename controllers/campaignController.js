@@ -42,14 +42,14 @@ const createCampaign = asyncHandler(async (req, res) => {
 const updateCampaign = asyncHandler(async (req, res) => {
     const allowed = ["title", "slug", "description", "coverImage", "targetAmount", "startsAt", "endsAt", "isActive"];
     const updates = Object.fromEntries(allowed.filter((key) => req.body[key] !== undefined).map((key) => [key, req.body[key]]));
-    const campaign = await Campaign.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
+    const campaign = await Campaign.findByIdAndUpdate(req.params.id, { $set: updates }, { returnDocument: 'after', runValidators: true });
     if (!campaign) throw new ApiError(404, "Campaign not found");
     await DonationAudit.create({ actor: req.user._id, action: "campaign.updated", metadata: { campaign: campaign._id, fields: Object.keys(updates) } });
     return res.status(200).json(new ApiResponse(200, "Campaign updated", campaign));
 });
 
 const deactivateCampaign = asyncHandler(async (req, res) => {
-    const campaign = await Campaign.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { new: true });
+    const campaign = await Campaign.findByIdAndUpdate(req.params.id, { $set: { isActive: false } }, { returnDocument: 'after' });
     if (!campaign) throw new ApiError(404, "Campaign not found");
     await DonationAudit.create({ actor: req.user._id, action: "campaign.deactivated", metadata: { campaign: campaign._id } });
     return res.status(200).json(new ApiResponse(200, "Campaign deactivated", campaign));

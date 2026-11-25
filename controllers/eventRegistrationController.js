@@ -86,7 +86,7 @@ const retryRegistrationNotification = asyncHandler(async (req, res) => {
             cancelTokenHash: crypto.createHash("sha256").update(cancellationToken).digest("hex"),
             cancelTokenExpires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         } },
-        { new: true }
+        { returnDocument: 'after' }
     );
     if (!registration) {
         const exists = await EventRegistration.exists({ _id: req.params.id });
@@ -158,7 +158,7 @@ const cancelRegistration = asyncHandler(async (req, res) => {
     const registration = await EventRegistration.findOneAndUpdate(
         selector,
         { $set: { status: "cancelled" }, $unset: { cancelTokenHash: 1, cancelTokenExpires: 1 } },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
     if (!registration) throw new ApiError(404, "Registration not found or cancellation link invalid or expired.");
 

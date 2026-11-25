@@ -219,7 +219,7 @@ const resetPassword = async ({
             $set: { password: passwordHash, otp: null, otpExpires: null, otpAttempts: 0 },
             $inc: { tokenVersion: 1 },
         },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
 
     if (!user) throw new ApiError(400, "Invalid or expired reset code.");
@@ -428,7 +428,7 @@ const updateProfile = async (userId, data = {}) => {
         throw new ApiError(400, "No supported profile fields were supplied.");
     }
     const user = await User.findByIdAndUpdate(userId, { $set: updates }, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
     }).select("-password -otp -otpExpires -resetPasswordToken -resetPasswordExpires");
     if (!user) throw new ApiError(404, "User not found.");

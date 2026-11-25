@@ -115,7 +115,7 @@ const updateUser = async (req, res) => {
             return res.status(403).json({ success: false, message: "Use Super Admin administrator management to change administrator access." });
         }
         const user = await User.findByIdAndUpdate(req.params.id, updates, {
-            new: true,
+            returnDocument: 'after',
             runValidators: true,
         });
 

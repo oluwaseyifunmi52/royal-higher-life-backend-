@@ -137,7 +137,7 @@ const updatePrayerRequest = asyncHandler(async (req, res) => {
     }
 
     const prayerRequest = await PrayerRequest.findByIdAndUpdate(req.params.id, updateData, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
     });
 

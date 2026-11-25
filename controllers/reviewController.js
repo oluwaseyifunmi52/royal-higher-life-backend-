@@ -76,7 +76,7 @@ const retryTestimonyNotification = asyncHandler(async (req, res) => {
     const review = await Review.findOneAndUpdate(
         { _id: req.params.id, notificationStatus: { $ne: "pending" } },
         { $set: { notificationStatus: "pending", notificationFailure: "" }, $inc: { notificationAttemptCount: 1 } },
-        { new: true }
+        { returnDocument: 'after' }
     );
     if (!review) {
         const exists = await Review.exists({ _id: req.params.id });
@@ -157,7 +157,7 @@ const updateReview = asyncHandler(async (req, res) => {
     if (updates.isApproved !== undefined && updates.status === undefined) {
         updates.status = updates.isApproved ? "approved" : "pending";
     }
-    const review = await Review.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const review = await Review.findByIdAndUpdate(req.params.id, updates, { returnDocument: 'after', runValidators: true });
 
     return res.status(200).json(new ApiResponse(200, "Review updated successfully", review));
 });

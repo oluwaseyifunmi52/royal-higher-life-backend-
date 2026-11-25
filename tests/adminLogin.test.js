@@ -140,7 +140,7 @@ test("password recovery atomically consumes the hashed OTP, hashes the new passw
     assert.equal(captured.update.$set.otp, null);
     assert.equal(captured.update.$set.otpExpires, null);
     assert.equal(captured.update.$inc.tokenVersion, 1);
-    assert.equal(captured.options.new, true);
+    assert.equal(captured.options.returnDocument, 'after');
 });
 
 test("expired or reused password-reset OTP is rejected without updating the account", async (t) => {

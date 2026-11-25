@@ -132,7 +132,7 @@ async function verifyAndFinalize(reference, eventId) {
     const updated = await Donation.findOneAndUpdate(
         { _id: donation._id, status: "pending", verifiedAt: null },
         { $set: { status: "successful", verifiedAt: new Date() } },
-        { new: true }
+        { returnDocument: 'after' }
     );
     if (updated) {
         await DonationAudit.create({ donation: donation._id, action: "payment.verified", eventId: eventId || undefined, metadata: { provider: "paystack", amountMinor: transaction.amount, currency: transaction.currency } }).catch((error) => {
@@ -261,7 +261,7 @@ const getDonationAudit = asyncHandler(async (req, res) => {
 const updateDonation = asyncHandler(async (req, res) => {
     const allowed = { donorName: req.body.donorName, phone: req.body.phone, isAnonymous: req.body.isAnonymous, note: req.body.note };
     for (const key of Object.keys(allowed)) if (allowed[key] === undefined) delete allowed[key];
-    const donation = await Donation.findByIdAndUpdate(req.params.id, { $set: allowed }, { new: true, runValidators: true });
+    const donation = await Donation.findByIdAndUpdate(req.params.id, { $set: allowed }, { returnDocument: 'after', runValidators: true });
     if (!donation) throw new ApiError(404, "Donation not found");
     await DonationAudit.create({ donation: donation._id, actor: req.user._id, action: "donation.updated", metadata: { fields: Object.keys(allowed) } });
     return res.status(200).json(new ApiResponse(200, "Donation updated", donation));

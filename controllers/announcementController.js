@@ -51,7 +51,7 @@ const updateAnnouncement = asyncHandler(async (req, res) => {
     validateImageUrl(update.imageUrl);
     if (update.content && !update.message) update.message = update.content;
     if (update.message && !update.content) update.content = update.message;
-    const announcement = await Announcement.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
+    const announcement = await Announcement.findByIdAndUpdate(req.params.id, update, { returnDocument: 'after', runValidators: true });
     if (!announcement) throw new ApiError(404, "Announcement not found");
     return res.status(200).json(new ApiResponse(200, "Announcement updated", announcement));
 });

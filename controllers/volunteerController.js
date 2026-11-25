@@ -63,7 +63,7 @@ const retryVolunteerNotification = asyncHandler(async (req, res) => {
     const volunteer = await Volunteer.findOneAndUpdate(
         { _id: req.params.id, notificationStatus: { $ne: "pending" } },
         { $set: { notificationStatus: "pending", notificationFailure: "" } },
-        { new: true }
+        { returnDocument: 'after' }
     );
     if (!volunteer) {
         const exists = await Volunteer.exists({ _id: req.params.id });
@@ -96,7 +96,7 @@ const updateVolunteerStatus = asyncHandler(async (req, res) => {
     const volunteer = await Volunteer.findByIdAndUpdate(
         req.params.id,
         { status },
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
 
     if (!volunteer) {

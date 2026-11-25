@@ -124,7 +124,7 @@ function createNotificationWorker(dependencies = {}) {
         }, {
             $set: { status: "processing", leaseUntil: new Date(now.getTime() + LEASE_MS), updatedAt: now },
             $inc: { attempts: 1 },
-        }, { new: true, sort: { createdAt: 1 } });
+        }, { returnDocument: 'after', sort: { createdAt: 1 } });
     }
 
     async function markExhaustedLeases() {

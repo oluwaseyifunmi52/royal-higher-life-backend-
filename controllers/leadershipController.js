@@ -19,7 +19,7 @@ const createLeadership = asyncHandler(async (req, res) => {
 });
 
 const updateLeadership = asyncHandler(async (req, res) => {
-    const leader = await Leadership.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const leader = await Leadership.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true });
     if (!leader) throw new ApiError(404, "Leadership record not found");
     return res.status(200).json(new ApiResponse(200, "Leadership member updated successfully", leader));
 });

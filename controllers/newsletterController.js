@@ -74,7 +74,7 @@ const unsubscribe = asyncHandler(async (req, res) => {
         await Newsletter.findOneAndUpdate(
             { unsubscribeTokenHash: tokenHash, unsubscribeTokenExpires: { $gt: new Date() } },
             { $set: { isActive: false }, $unset: { unsubscribeTokenHash: 1, unsubscribeTokenExpires: 1 } },
-            { new: true }
+            { returnDocument: 'after' }
         );
     }
     return res.status(200).json(new ApiResponse(200, "If the link is valid, the address has been unsubscribed."));

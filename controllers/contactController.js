@@ -132,7 +132,7 @@ const updateContactStatus = asyncHandler(async (req, res) => {
     const contact = await Contact.findByIdAndUpdate(
         req.params.id,
         update,
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
     if (!contact) throw new ApiError(404, "Contact message not found");
     return res.status(200).json(new ApiResponse(200, "Contact status updated", contact));

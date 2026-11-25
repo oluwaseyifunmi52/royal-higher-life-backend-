@@ -37,7 +37,7 @@ const updatePartnershipStatus = asyncHandler(async (req, res) => {
     const partnership = await Partnership.findByIdAndUpdate(
         req.params.id,
         { status },
-        { new: true }
+        { returnDocument: 'after' }
     );
 
     if (!partnership) {

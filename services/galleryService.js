@@ -16,7 +16,7 @@ const getGalleryById = async (id) => {
 
 const updateGallery = async (id, data) => {
     return await Gallery.findByIdAndUpdate(id, data, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
     });
 };

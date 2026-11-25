@@ -50,7 +50,7 @@ const updateSiteContent = asyncHandler(async (req, res) => {
             ...(req.body.publish === true ? { publishedContent: content, isPublished: true } : {}),
             updatedBy: req.user._id,
         } },
-        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+        { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true },
     );
     await recordAdminAction(req.user, req.body.publish === true ? "site-content.publish" : "site-content.save-draft", "site-content", "primary", { fields: Object.keys(content) });
     return res.status(200).json(new ApiResponse(200, req.body.publish === true ? "Website content published" : "Website content saved as draft", { content: record.draftContent, isPublished: record.isPublished }));

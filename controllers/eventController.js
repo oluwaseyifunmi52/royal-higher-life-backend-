@@ -45,7 +45,7 @@ const getEventById = asyncHandler(async (req, res) => {
 
 const updateEvent = asyncHandler(async (req, res) => {
     const event = await Event.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
     });
 

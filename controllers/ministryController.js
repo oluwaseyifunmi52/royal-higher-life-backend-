@@ -36,7 +36,7 @@ const updateMinistry = asyncHandler(async (req, res) => {
     const ministry = await Ministry.findByIdAndUpdate(
         req.params.id,
         req.body,
-        { new: true, runValidators: true }
+        { returnDocument: 'after', runValidators: true }
     );
 
     if (!ministry) {
