@@ -1,5 +1,14 @@
 const errorHandler = (err, req, res, next) => {
-    console.error("Error:", err.message || err);
+    const isProduction = process.env.NODE_ENV === "production";
+    if (isProduction) {
+        console.error("Request failed", { name: err.name || "Error", code: err.code || undefined, status: err.statusCode || err.status || 500 });
+    } else {
+        console.error("Error:", err.message || err);
+    }
+
+    if (err.message === "Not allowed by CORS") {
+        return res.status(403).json({ success: false, message: "Origin is not allowed" });
+    }
 
     if (err.code === "CORS_ORIGIN_DENIED") {
         return res.status(403).json({
@@ -38,16 +47,16 @@ const errorHandler = (err, req, res, next) => {
         return res.status(400).json({
             success: false,
             message: "Validation failed",
-            errors: messages,
+            ...(isProduction ? {} : { errors: messages }),
         });
     }
 
     // Mongoose duplicate key error
     if (err.code === 11000) {
-        const field = Object.keys(err.keyValue)[0];
+        const field = Object.keys(err.keyValue || {})[0];
         return res.status(400).json({
             success: false,
-            message: `${field} already exists`,
+            message: field ? `${field} already exists` : "A record with these details already exists.",
         });
     }
 
@@ -55,7 +64,7 @@ const errorHandler = (err, req, res, next) => {
     if (err.name === "CastError") {
         return res.status(400).json({
             success: false,
-            message: `Invalid ${err.path}: ${err.value}`,
+            message: isProduction ? `Invalid ${err.path}` : `Invalid ${err.path}: ${err.value}`,
         });
     }
 
@@ -84,10 +93,13 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // Default server error
-    const statusCode = err.statusCode || err.status || 500;
+    const candidateStatus = Number(err.statusCode || err.status);
+    const statusCode = Number.isInteger(candidateStatus) && candidateStatus >= 400 && candidateStatus <= 599
+        ? candidateStatus
+        : 500;
     res.status(statusCode).json({
         success: false,
-        message: process.env.NODE_ENV === "production"
+        message: isProduction && statusCode >= 500
             ? "Internal Server Error"
             : err.message || "Internal Server Error",
     });

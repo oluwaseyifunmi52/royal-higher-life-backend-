@@ -16,7 +16,8 @@ const auth = async (req, res, next) => {
 
         const decoded = jwt.verify(
             token,
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET,
+            { algorithms: ["HS256"] }
         );
 
         const user = await User.findById(decoded.id);
@@ -38,10 +39,9 @@ const auth = async (req, res, next) => {
 
     } catch (error) {
 
-        console.error(
-            "Authentication Error:",
-            error.message
-        );
+        if (process.env.NODE_ENV !== "production") {
+            console.error("Authentication Error:", error.name || "AuthenticationError");
+        }
 
         return res.status(401).json({
             success: false,

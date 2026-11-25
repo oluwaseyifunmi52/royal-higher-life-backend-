@@ -57,6 +57,9 @@ app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            scriptSrcAttr: ["'none'"],
             scriptSrc: ["'self'"],
             styleSrc: ["'self'", "'unsafe-inline'"],
             imgSrc: ["'self'", "data:", "https:"],
@@ -73,11 +76,10 @@ app.use(helmet({
         preload: true,
     },
     referrerPolicy: { policy: "strict-origin-when-cross-origin" },
-    noSniff: true,
-    xssFilter: true,
-    frameguard: { action: "deny" },
 }));
-app.use(morgan("dev"));
+app.use(morgan(process.env.NODE_ENV === "production"
+    ? (tokens, req, res) => `${tokens.method(req, res)} ${req.path} ${tokens.status(req, res)} ${tokens["response-time"](req, res)} ms`
+    : "dev"));
 app.use(express.json({ limit: "1mb", verify: (req, res, buffer) => { req.rawBody = Buffer.from(buffer); } }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(cookieParser());
